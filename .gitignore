@@ -1,0 +1,13 @@
+# Binaries and Engines
+engines/
+__pycache__/
+*.pyc
+
+# Local Data and Models
+model.json
+opponents/
+my_games.pgn
+
+# Environment
+.env
+venv/
