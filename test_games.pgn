@@ -1,0 +1,13 @@
+[Event "Test Game 1"]
+[White "Chipin"]
+[Black "OpponentA"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 1-0
+
+[Event "Test Game 2"]
+[White "OpponentB"]
+[Black "Chipin"]
+[Result "1-0"]
+
+1. e4 c5 2. Nf3 d6 1-0

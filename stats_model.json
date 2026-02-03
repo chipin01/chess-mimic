@@ -1,0 +1,42 @@
+{
+  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": {
+    "e2e4": {
+      "count": 1,
+      "win": 1,
+      "loss": 0,
+      "draw": 0
+    }
+  },
+  "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": {
+    "g1f3": {
+      "count": 1,
+      "win": 1,
+      "loss": 0,
+      "draw": 0
+    }
+  },
+  "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq -": {
+    "f1b5": {
+      "count": 1,
+      "win": 1,
+      "loss": 0,
+      "draw": 0
+    }
+  },
+  "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": {
+    "c7c5": {
+      "count": 1,
+      "win": 0,
+      "loss": 1,
+      "draw": 0
+    }
+  },
+  "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq -": {
+    "d7d6": {
+      "count": 1,
+      "win": 0,
+      "loss": 1,
+      "draw": 0
+    }
+  }
+}

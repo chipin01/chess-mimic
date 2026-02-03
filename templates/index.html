@@ -3,192 +3,341 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chess Mimic ♟️ V2</title>
+    <title>Chess Mimic - Professional Practice</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; display: flex; height: 100vh; background: #1a1a1a; color: #eee; overflow: hidden; }
-        #sidebar { width: 350px; background: #252525; display: flex; flex-direction: column; border-right: 1px solid #333; z-index: 10; }
-        #main { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; background: #111; overflow: hidden; padding: 20px; }
-        #board-wrapper { position: relative; width: 800px; height: 800px; border: 2px solid #333; background: #000; }
-        #board { width: 800px !important; height: 800px !important; }
-        #arrow-overlay { position: absolute; top: 0; left: 0; width: 800px; height: 800px; pointer-events: none; z-index: 5; }
-        .tabs { display: flex; background: #333; }
-        .tab { flex: 1; padding: 12px; text-align: center; cursor: pointer; border-bottom: 3px solid transparent; font-weight: bold; font-size: 0.9em; color: #888; transition: 0.2s; }
-        .tab.active { border-bottom: 3px solid #3498db; color: white; background: #3d3d3d; }
-        .tab-content { flex: 1; overflow-y: auto; padding: 20px; display: none; }
-        .tab-content.active { display: block; }
-        h2 { margin-top: 0; font-size: 1.2em; color: #3498db; }
-        .sidebar-section { margin-bottom: 25px; }
-        label { display: block; margin-bottom: 8px; font-size: 0.85em; color: #aaa; text-transform: uppercase; letter-spacing: 1px; }
-        select, input, button { width: 100%; padding: 12px; margin-top: 5px; border-radius: 4px; border: 1px solid #444; background: #333; color: white; box-sizing: border-box; }
-        button { background: #3498db; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; }
-        button:hover { background: #2980b9; }
-        .upload-form { background: #2d2d2d; padding: 15px; border-radius: 6px; border: 1px dashed #444; }
-        .status-bar { padding: 10px; background: #3498db; color: white; text-align: center; font-weight: bold; font-size: 0.9em; margin-bottom: 20px; border-radius: 4px; }
-        .move-row { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #2d2d2d; border-radius: 4px; margin-bottom: 8px; border-left: 4px solid transparent; }
-        .move-row.best { border-left-color: #2ecc71; background: #34495e; }
-        .move-uci { font-family: monospace; font-size: 1.1em; font-weight: bold; }
-        .move-score { font-size: 0.9em; color: #aaa; }
+        .active-tab { border-bottom: 2px solid #3b82f6; color: #3b82f6; }
+        .highlight-player { color: #3b82f6; font-weight: bold; }
+        #board-container { position: relative; }
+        #arrow-svg { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            pointer-events: none; 
+            z-index: 100; /* Ensure arrows are above the board */
+        }
+        #eval-bar-v { 
+            width: 30px; 
+            flex-shrink: 0; 
+            background: #374151; 
+            border-radius: 2px; 
+            overflow: visible; /* Allow text to be seen if overflowed */
+            display: flex; 
+            flex-direction: column-reverse; 
+            position: relative; 
+        }
+        #eval-white-v { background: white; width: 100%; transition: height 0.5s ease; }
+        #eval-num { 
+            position: absolute; 
+            width: 100%; 
+            text-align: center; 
+            font-size: 11px; 
+            font-weight: bold; 
+            color: #ff00ff; /* Bright magenta for debugging visibility */
+            z-index: 50; 
+            top: 50%; 
+            transform: translateY(-50%);
+            pointer-events: none;
+            text-shadow: 1px 1px 1px black;
+        }
     </style>
 </head>
-<body>
-    <div id="sidebar">
-        <div class="tabs">
-            <div class="tab active" onclick="switchTab('analysis')">ANALYSIS</div>
-            <div class="tab" onclick="switchTab('settings')">SETTINGS</div>
-        </div>
-        <div id="tab-analysis" class="tab-content active">
-            <div id="status-display" class="status-bar">White to move</div>
-            <div class="sidebar-section">
-                <label>Current Opponent</label>
-                <select id="opponent-select" onchange="analyzeCurrent()">
-                    <option value="me">Myself (Default)</option>
-                    {% for opp in opponents %}
-                    <option value="{{ opp }}">{{ opp }}</option>
-                    {% endfor %}
-                </select>
+<body class="bg-gray-900 text-white font-sans overflow-hidden">
+    <div class="flex flex-col h-screen">
+        <header class="bg-gray-800 p-3 border-b border-gray-700 flex justify-between items-center">
+            <h1 class="text-xl font-bold text-blue-400">♟️ Chess Mimic</h1>
+            <div class="flex items-center space-x-4">
+                <div id="engine-status" class="text-xs text-gray-500 font-mono">Engine: Idle</div>
+                <input type="text" id="player-filter" placeholder="Filter by Player..." class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm focus:outline-none">
+                <input type="file" id="pgn-upload" class="hidden">
+                <button onclick="$('#pgn-upload').click()" class="bg-blue-600 hover:bg-blue-500 px-4 py-1 rounded text-sm font-medium">Upload PGN</button>
             </div>
-            <div id="analysis-results">
-                <div style="text-align: center; color: #666; margin-top: 50px;">Move a piece to begin analysis</div>
-            </div>
-        </div>
-        <div id="tab-settings" class="tab-content">
-            <h2>Game Management</h2>
-            <div class="sidebar-section">
-                <label>Upload Opponent PGN</label>
-                <div class="upload-form">
-                    <input type="text" id="opp-name" placeholder="Opponent Name">
-                    <input type="file" id="pgn-file" accept=".pgn">
-                    <button onclick="uploadPGN()">Upload & Process</button>
+        </header>
+
+        <main class="flex flex-1 overflow-hidden">
+            <div class="flex-1 p-6 flex items-center justify-center bg-gray-850">
+                <div id="board-container" class="relative w-full max-w-[600px] flex space-x-2 h-fit items-start">
+                    <div id="eval-bar-v" class="border border-gray-700">
+                        <div id="eval-num">0.0</div>
+                        <div id="eval-white-v" style="height: 50%"></div>
+                    </div>
+                    <div class="relative flex-1">
+                        <div id="myBoard" class="w-full"></div>
+                        <!-- SVG for arrows -->
+                        <svg id="arrow-svg"></svg>
+                    </div>
                 </div>
-                <div id="upload-status" style="margin-top: 10px; font-size: 0.8em;"></div>
             </div>
-            <div class="sidebar-section">
-                <label>Board Controls</label>
-                <button onclick="resetBoard()" style="background: #e74c3c; margin-bottom: 10px;">Reset Game</button>
-                <button onclick="flipBoard()" style="background: #444;">Flip Board View</button>
+
+            <div class="w-[400px] bg-gray-800 border-l border-gray-700 flex flex-col">
+                <div class="flex border-b border-gray-700">
+                    <button onclick="showTab('tree')" id="tab-tree" class="flex-1 py-3 text-sm font-medium active-tab">Opening Tree</button>
+                    <button onclick="showTab('games')" id="tab-games" class="flex-1 py-3 text-sm font-medium text-gray-400">Games</button>
+                    <button onclick="showTab('moves')" id="tab-moves" class="flex-1 py-3 text-sm font-medium text-gray-400">Moves</button>
+                    <button onclick="showTab('analysis')" id="tab-analysis" class="flex-1 py-3 text-sm font-medium text-gray-400">Analysis</button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto p-4">
+                    <div id="content-tree" class="tab-content">
+                        <table class="w-full text-left text-sm">
+                            <thead class="text-gray-500 border-b border-gray-700">
+                                <tr><th class="pb-2">Move</th><th class="pb-2">Count</th><th class="pb-2">Win %</th><th class="pb-2 text-right">Result</th></tr>
+                            </thead>
+                            <tbody id="tree-body"></tbody>
+                        </table>
+                    </div>
+                    <div id="content-games" class="tab-content hidden"><div id="game-list" class="space-y-2"></div></div>
+                    <div id="content-moves" class="tab-content hidden">
+                        <div id="active-game-header" class="mb-4 pb-2 border-b border-gray-700 hidden">
+                            <div class="font-bold text-blue-400" id="ag-players"></div>
+                            <div class="text-xs text-gray-400" id="ag-meta"></div>
+                        </div>
+                        <div id="move-list" class="flex flex-wrap gap-1">
+                            <div class="text-gray-500 text-xs italic">Select a game from the Games tab to view moves...</div>
+                        </div>
+                    </div>
+                    <div id="content-analysis" class="tab-content hidden">
+                        <div id="engine-lines" class="space-y-3"></div>
+                    </div>
+                </div>
+                <div class="p-4 border-t border-gray-700 bg-gray-850 flex justify-between items-center">
+                    <div class="flex space-x-1">
+                        <button id="btn-start" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-sm">|&lt;</button>
+                        <button id="btn-prev" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-sm">&lt;</button>
+                        <button id="btn-next" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-sm">&gt;</button>
+                        <button id="btn-end" class="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-sm">&gt;|</button>
+                    </div>
+                    <div id="eval-text" class="font-mono text-sm text-gray-400">0.0</div>
+                </div>
             </div>
-        </div>
+        </main>
     </div>
-    <div id="main">
-        <div id="board-wrapper">
-            <div id="board"></div>
-            <svg id="arrow-overlay" width="800" height="800" viewBox="0 0 800 800"></svg>
-        </div>
-    </div>
+
     <script>
-        var board = null;
-        var game = new Chess();
-        var $overlay = $('#arrow-overlay');
-        function switchTab(tabId) {
-            $('.tab').removeClass('active');
-            $('.tab-content').removeClass('active');
-            $(`.tab:contains('${tabId.toUpperCase()}')`).addClass('active');
-            $(`#tab-${tabId}`).addClass('active');
-        }
-        function getSquareCenter(square) {
-            var files = 'abcdefgh';
-            var ranks = '87654321';
-            var file = files.indexOf(square[0]);
-            var rank = ranks.indexOf(square[1]);
-            if (board.orientation() === 'black') {
-                file = 7 - file;
-                rank = 7 - rank;
-            }
-            var rect = document.getElementById('board').getBoundingClientRect();
-            var sqSize = rect.width / 8;
-            return { x: file * sqSize + sqSize / 2, y: rank * sqSize + sqSize / 2 };
-        }
-        function drawArrow(from, to, color, width=6) {
-            var start = getSquareCenter(from);
-            var end = getSquareCenter(to);
-            var id = 'arrow-' + from + '-' + to;
-            var markerId = 'head-' + id;
-            if ($('#' + markerId).length === 0) {
-                var marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-                marker.setAttribute('id', markerId); marker.setAttribute('markerWidth', '6'); marker.setAttribute('markerHeight', '6');
-                marker.setAttribute('refX', '0'); marker.setAttribute('refY', '3'); marker.setAttribute('orient', 'auto');
-                var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                path.setAttribute('d', 'M0,0 L0,6 L6,3 z'); path.setAttribute('fill', color);
-                marker.appendChild(path); $overlay.append(marker);
-            }
-            var dx = end.x - start.x; var dy = end.y - start.y; var len = Math.sqrt(dx*dx + dy*dy);
-            var shorten = 10; var actualEndX = end.x - (dx / len) * shorten; var actualEndY = end.y - (dy / len) * shorten;
-            var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-            line.setAttribute('x1', start.x); line.setAttribute('y1', start.y);
-            line.setAttribute('x2', actualEndX); line.setAttribute('y2', actualEndY);
-            line.setAttribute('stroke', color); line.setAttribute('stroke-width', width);
-            line.setAttribute('marker-end', 'url(#' + markerId + ')'); line.setAttribute('opacity', '0.7');
-            $overlay.append(line);
-        }
-        function clearArrows() { $overlay.empty() }
-        function flipBoard() { board.flip(); analyzeCurrent(); }
-        function uploadPGN() {
-            var file = $('#pgn-file')[0].files[0];
-            var name = $('#opp-name').val();
-            if (!file || !name) { alert("Please provide name and file"); return; }
-            var formData = new FormData();
-            formData.append('file', file); formData.append('name', name);
-            $('#upload-status').text('Processing...');
-            $.ajax({
-                url: '/upload', type: 'POST', data: formData, processData: false, contentType: false,
-                success: function() { location.reload(); },
-                error: function() { $('#upload-status').text('Error uploading.'); }
-            });
-        }
-        function onDrop (source, target) {
-            var move = game.move({ from: source, to: target, promotion: 'q' });
+        let board = null;
+        let game = new Chess();
+        let treeData = {};
+        const ARROW_COLOR = '#60a5fa'; // Greyish blue (Tailwind blue-400)
+
+        function onDrop(source, target) {
+            let move = game.move({ from: source, to: target, promotion: 'q' });
             if (move === null) return 'snapback';
-            updateStatus(); analyzeCurrent();
+            board.position(game.fen());
+            updateUI();
+            fetchAnalysis();
         }
-        function updateStatus () {
-            var moveColor = game.turn() === 'b' ? 'Black' : 'White';
-            var status = moveColor + ' to move';
-            if (game.in_checkmate()) status = 'Checkmate!';
-            else if (game.in_draw()) status = 'Draw';
-            $('#status-display').text(status);
+
+        function updateUI() {
+            // Force sync height
+            const boardHeight = $('#myBoard').height();
+            if (boardHeight > 0) $('#eval-bar-v').height(boardHeight);
+
+            const fenKey = game.fen().split(' ').slice(0, 4).join(' ');
+            const moves = treeData[fenKey] || {};
+            const $body = $('#tree-body').empty();
+            Object.keys(moves).sort((a, b) => moves[b].count - moves[a].count).forEach(m => {
+                const s = moves[m];
+                const winRate = ((s.win / s.count) * 100).toFixed(1);
+                $body.append(`<tr class="border-b border-gray-850 hover:bg-gray-750 cursor-pointer" onclick="playMove('${m}')">
+                    <td class="py-3 font-bold text-blue-300">${m}</td><td class="py-3">${s.count}</td><td class="py-3">${winRate}%</td>
+                    <td class="py-3 text-right text-xs"><span class="text-green-400">${s.win}W</span> / <span class="text-red-400">${s.loss}L</span></td></tr>`);
+            });
         }
-        function analyzeCurrent() {
-            var fen = game.fen();
-            var opp = $('#opponent-select').val();
-            $('#analysis-results').html('<div style="text-align:center; padding:20px;">Engine Thinking...</div>');
-            clearArrows();
-            $.ajax({
-                url: '/analyze', type: 'POST', contentType: 'application/json',
-                data: JSON.stringify({ fen: fen, opponent: opp }),
-                success: function(data) {
-                    var html = '<h2>Stockfish Recommendation</h2>';
-                    if (data.stockfish.best_move) {
-                        drawArrow(data.stockfish.best_move.substring(0,2), data.stockfish.best_move.substring(2,4), '#3498db', 6);
-                        html += `<div class="move-row best"><span class="move-uci" style="color:#3498db">➡ ${data.stockfish.best_move}</span><span class="move-score">CP: ${(data.stockfish.score/100).toFixed(2)}</span></div>`;
-                    }
-                    html += `<h2 style="margin-top:30px;">${opp === 'me' ? 'My' : opp + "'s"} Historical Moves</h2>`;
-                    if (data.mimic && data.mimic.length > 0) {
-                        data.mimic.forEach(m => {
-                            var color = m.is_best ? '#2ecc71' : '#f39c12';
-                            if (!m.is_best) drawArrow(m.move.substring(0,2), m.move.substring(2,4), color, 4);
-                            html += `<div class="move-row"><span class="move-uci" style="color:${color}">➡ ${m.move} (${m.count}x)</span><span class="move-score">Diff: ${((data.stockfish.score - m.score)/100).toFixed(2)}</span></div>`;
-                        });
-                    } else { html += '<p style="color:#666">No historical data for this position.</p>'; }
-                    $('#analysis-results').html(html);
+
+        function drawArrow(move, color, opacity, index) {
+            const from = move.substring(0, 2);
+            const to = move.substring(2, 4);
+            const boardEl = document.getElementById('myBoard');
+            const rect = boardEl.getBoundingClientRect();
+            const sqSize = rect.width / 8;
+
+            const getCoords = (sq) => {
+                const col = sq.charCodeAt(0) - 97;
+                const row = 8 - parseInt(sq[1]);
+                return { x: col * sqSize + sqSize / 2, y: row * sqSize + sqSize / 2 };
+            };
+
+            const f = getCoords(from), t = getCoords(to);
+            const svg = document.getElementById('arrow-svg');
+            svg.setAttribute('width', rect.width);
+            svg.setAttribute('height', rect.height);
+            svg.setAttribute('viewBox', `0 0 ${rect.width} ${rect.height}`);
+
+            const markerId = `arrowhead-${index}`;
+            let defs = svg.querySelector('defs');
+            if (!defs) {
+                defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                svg.appendChild(defs);
+            }
+
+            const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+            marker.setAttribute('id', markerId);
+            marker.setAttribute('markerWidth', '6');
+            marker.setAttribute('markerHeight', '6');
+            marker.setAttribute('refX', '5');
+            marker.setAttribute('refY', '3');
+            marker.setAttribute('orient', 'auto');
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', 'M0,0 L0,6 L6,3 Z');
+            path.setAttribute('fill', color);
+            path.setAttribute('fill-opacity', opacity);
+            marker.appendChild(path);
+            defs.appendChild(marker);
+
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', f.x);
+            line.setAttribute('y1', f.y);
+            line.setAttribute('x2', t.x);
+            line.setAttribute('y2', t.y);
+            line.setAttribute('stroke', color);
+            line.setAttribute('stroke-width', '8'); // Much thicker for visibility
+            line.setAttribute('stroke-opacity', opacity);
+            line.setAttribute('marker-end', `url(#${markerId})`);
+            svg.appendChild(line);
+        }
+
+        function fetchAnalysis() {
+            $('#engine-status').text('Engine: Thinking...');
+            const svg = document.getElementById('arrow-svg');
+            while (svg.firstChild) svg.removeChild(svg.firstChild);
+            
+            $.get('/analyze?fen=' + encodeURIComponent(game.fen()), function(data) {
+                $('#engine-status').text('Engine: Ready');
+                if (!data || data.length === 0) return;
+                
+                const best = data[0];
+                const score = (best.score / 100).toFixed(1);
+                $('#eval-text').text((score > 0 ? '+' : '') + score);
+                $('#eval-num').text(Math.abs(score));
+                
+                let percent = 50 + (best.score / 10);
+                $('#eval-white-v').css('height', Math.max(5, Math.min(95, percent)) + '%');
+
+                const $lines = $('#engine-lines').empty();
+                data.forEach((line, i) => {
+                    const lScore = (line.score / 100).toFixed(1);
+                    // Higher transparency for lower rank (0=1.0, 1=0.6, 2=0.3)
+                    const opacity = i === 0 ? 0.9 : (i === 1 ? 0.6 : 0.3);
+                    drawArrow(line.best_move, ARROW_COLOR, opacity, i);
+                    $lines.append(`<div class="bg-gray-750 p-2 rounded border text-xs" style="border-color: ${ARROW_COLOR}${Math.floor(opacity*255).toString(16)}">
+                        <div class="flex justify-between items-center mb-1">
+                            <span style="color: ${ARROW_COLOR}" class="font-mono font-bold">${line.best_move}</span>
+                            <span class="font-mono">${lScore > 0 ? '+' : ''}${lScore}</span>
+                        </div>
+                    </div>`);
+                });
+            });
+        }
+
+        function showTab(tab) {
+            $('.tab-content').addClass('hidden'); $(`#content-${tab}`).removeClass('hidden');
+            $('.flex-1.py-3').removeClass('active-tab').addClass('text-gray-400');
+            $(`#tab-${tab}`).addClass('active-tab').removeClass('text-gray-400');
+        }
+
+        function playMove(uci) { game.move(uci, { sloppy: true }); board.position(game.fen()); updateUI(); fetchAnalysis(); }
+
+        function loadData() {
+            const player = $('#player-filter').val();
+            $.get('/tree?player=' + player, data => { treeData = data; updateUI(); });
+            $.get('/games', games => {
+                const $list = $('#game-list').empty();
+                games.forEach(g => {
+                    const whiteName = g.white || "Unknown";
+                    const blackName = g.black || "Unknown";
+                    const isWhiteMe = player && whiteName.toLowerCase().includes(player.toLowerCase());
+                    const isBlackMe = player && blackName.toLowerCase().includes(player.toLowerCase());
+                    
+                    $list.append(`<div class="bg-gray-750 p-3 rounded border border-gray-700 text-sm hover:border-blue-500 cursor-pointer transition" onclick="selectGame(${g.id})">
+                        <div class="flex justify-between items-start"><div>
+                            <div class="font-bold">
+                                <span class="${isWhiteMe ? 'highlight-player' : ''}">${whiteName}</span> 
+                                <span class="text-gray-500 mx-1">vs</span> 
+                                <span class="${isBlackMe ? 'highlight-player' : ''}">${blackName}</span>
+                            </div>
+                            <div class="text-gray-400 text-xs">${g.date} • ${g.result}</div>
+                        </div>
+                        <div class="flex flex-col items-end space-y-2">
+                            <button onclick="event.stopPropagation(); deleteGame(${g.id})" class="text-red-500 text-xs">Delete</button>
+                            <div class="flex space-x-1">
+                                <button onclick="event.stopPropagation(); flipBoard('white')" class="bg-gray-600 hover:bg-gray-500 px-1 rounded text-[10px]">W</button>
+                                <button onclick="event.stopPropagation(); flipBoard('black')" class="bg-gray-600 hover:bg-gray-500 px-1 rounded text-[10px]">B</button>
+                            </div>
+                        </div>
+                    </div></div>`);
+                });
+            });
+        }
+
+        function flipBoard(side) {
+            board.orientation(side);
+        }
+
+        function selectGame(id) {
+            const currentPlayer = $('#player-filter').val();
+            $.get('/games/' + id, function(data) {
+                $('#active-game-header').removeClass('hidden');
+                $('#ag-players').text(`${data.white} vs ${data.black}`);
+                $('#ag-meta').text(`${data.date} • Result: ${data.result}`);
+                
+                // Auto-orient based on player filter
+                if (currentPlayer) {
+                    if (data.white.toLowerCase().includes(currentPlayer.toLowerCase())) board.orientation('white');
+                    else if (data.black.toLowerCase().includes(currentPlayer.toLowerCase())) board.orientation('black');
                 }
+
+                const $mlist = $('#move-list').empty();
+                data.moves.forEach((m, i) => {
+                    const moveNum = Math.floor(i / 2) + 1;
+                    if (i % 2 === 0) {
+                        $mlist.append(`<div class="w-full text-xs text-gray-500 mt-1">Move ${moveNum}</div>`);
+                    }
+                    $mlist.append(`<button onclick="jumpToFen('${m.fen}')" class="bg-gray-700 hover:bg-blue-600 px-2 py-1 rounded text-xs font-mono transition">${m.san}</button>`);
+                });
+                
+                showTab('moves');
+                game.load(data.initial_fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+                board.position(game.fen());
+                updateUI();
+                fetchAnalysis();
             });
         }
-        $(document).ready(function() {
-            board = Chessboard('board', {
-                draggable: true, 
-                position: 'start', 
-                onDragStart: (s, p) => !game.game_over() && !((game.turn() === 'w' && p.search(/^b/) !== -1) || (game.turn() === 'b' && p.search(/^w/) !== -1)),
-                onDrop: onDrop, 
-                onSnapEnd: () => board.position(game.fen()),
-                pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
-            });
-            updateStatus();
-            setTimeout(function() { board.resize(); }, 500);
+
+        function jumpToFen(fen) {
+            game.load(fen);
+            board.position(fen);
+            updateUI();
+            fetchAnalysis();
+        }
+
+        function deleteGame(id) { if(confirm('Delete?')) $.ajax({ url: '/games/' + id, type: 'DELETE', success: loadData }); }
+        $('#pgn-upload').change(function(e) {
+            const fd = new FormData(); fd.append('file', e.target.files[0]);
+            $.ajax({ url: '/upload', type: 'POST', data: fd, processData: false, contentType: false, success: loadData });
         });
+        $('#player-filter').on('input', loadData);
+        
+        board = Chessboard('myBoard', { 
+            draggable: true, 
+            position: 'start', 
+            onDrop: onDrop, 
+            moveSpeed: 0, 
+            snapSpeed: 0, 
+            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png' 
+        });
+        
+        loadData();
+        setTimeout(updateUI, 500); // Wait for board render to sync heights
+
+        $('#btn-start').click(() => { game.reset(); board.start(); updateUI(); const svg = document.getElementById('arrow-svg'); while (svg.firstChild) svg.removeChild(svg.firstChild); });
+        $('#btn-prev').click(() => { game.undo(); board.position(game.fen()); updateUI(); fetchAnalysis(); });
+        $('#btn-next').click(() => { /* Add logic for next move if viewing game */ });
     </script>
 </body>
 </html>

@@ -1,102 +1,192 @@
-from flask import Flask, render_template, request, jsonify
 import sys
 import os
-import json
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+from flask import Flask, render_template, request, jsonify
+import database
+import ingest
 import chess.pgn
 import io
-from werkzeug.utils import secure_filename
-
-# Add current dir to path to import mimic
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from mimic import get_analysis, load_model
 
 app = Flask(__name__)
-OPPONENTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'opponents')
-os.makedirs(OPPONENTS_DIR, exist_ok=True)
-
-# Cache models in memory
-models = {
-    "me": load_model()
-}
-
-def get_opponent_model(name):
-    if name == "me":
-        return models["me"]
-    
-    model_path = os.path.join(OPPONENTS_DIR, f"{name}.json")
-    if os.path.exists(model_path):
-        with open(model_path, 'r') as f:
-            return json.load(f)
-    return {}
+database.init_db()
 
 @app.route('/')
 def index():
-    opponents = [f.replace('.json', '') for f in os.listdir(OPPONENTS_DIR) if f.endswith('.json')]
-    return render_template('index.html', opponents=opponents)
-
-@app.route('/analyze', methods=['POST'])
-def analyze():
-    data = request.json
-    fen = data.get('fen')
-    opponent = data.get('opponent', 'me')
-    
-    if not fen:
-        return jsonify({"error": "No FEN provided"}), 400
-    
-    current_model = get_opponent_model(opponent)
-    result = get_analysis(fen, current_model)
-    return jsonify(result)
+    return render_template('index.html')
 
 @app.route('/upload', methods=['POST'])
 def upload_pgn():
-    if 'file' not in request.files or 'name' not in request.form:
-        return jsonify({"error": "Missing file or opponent name"}), 400
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
     
     file = request.files['file']
-    opponent_name = secure_filename(request.form['name'])
-    
     if file.filename == '':
-        return jsonify({"error": "No file selected"}), 400
+        return jsonify({"error": "No selected file"}), 400
 
-    # Ingest logic directly in the web server for simplicity in V2
-    import collections
-    move_db = collections.defaultdict(collections.Counter)
+    content = file.read().decode('utf-8')
+    pgn_io = io.StringIO(content)
     
-    pgn_text = file.read().decode('utf-8')
-    pgn_io = io.StringIO(pgn_text)
-    
-    count = 0
+    games_added = 0
     while True:
         game = chess.pgn.read_game(pgn_io)
-        if game is None: break
+        if game is None:
+            break
+        
+        # Extract headers
+        h = game.headers
+        chapter_name = h.get("ChapterName", "")
+        white = h.get("White", "Unknown")
+        black = h.get("Black", "Unknown")
+
+        # Priority 1: Use standard White/Black headers if they contain actual names
+        is_white_generic = white.lower() in ["unknown", "?", ""]
+        is_black_generic = black.lower() in ["unknown", "?", ""]
+
+        # Priority 2: Fallback to parsing ChapterName if standard headers are generic
+        if (is_white_generic or is_black_generic) and chapter_name:
+            try:
+                # Split by "/" and clean up score suffixes
+                parts = chapter_name.split("/")
+                if len(parts) == 2:
+                    import re
+                    # Updated regex to match (0), (1), (1/2), (0.5), (1-0), etc.
+                    score_pattern = r'\s*\([\d\/\.\-]+\)\s*'
+                    white_parsed = re.sub(score_pattern, '', parts[0]).strip()
+                    black_parsed = re.sub(score_pattern, '', parts[1]).strip()
+                    
+                    if is_white_generic:
+                        white = white_parsed
+                    if is_black_generic:
+                        black = black_parsed
+            except:
+                pass
+
+        database.add_game(
+            pgn=str(game),
+            white=white,
+            black=black,
+            result=h.get("Result", "*"),
+            date=h.get("Date", "????.??.??")
+        )
+        games_added += 1
+
+    return jsonify({"success": True, "count": games_added})
+
+@app.route('/tree')
+def get_tree():
+    player_name = request.args.get('player', '')
+    games = database.get_all_games()
+    
+    # Simple in-memory tree generation from DB games
+    # This is a placeholder for a more optimized implementation
+    # using the logic from our debugged ingest.py
+    
+    # move_db[fen][move] = stats
+    move_db = {} 
+    
+    for g in games:
+        pgn_io = io.StringIO(g['pgn'])
+        game = chess.pgn.read_game(pgn_io)
+        if not game: continue
         
         white = game.headers.get("White", "")
         black = game.headers.get("Black", "")
+        res = game.headers.get("Result", "*")
         
-        # We assume the user is uploading games where this opponent played
-        # If the name matches either, we ingest their moves
-        is_white = opponent_name.lower() in white.lower()
-        is_black = opponent_name.lower() in black.lower()
+        is_white = player_name.lower() in white.lower()
+        is_black = player_name.lower() in black.lower()
         
-        if not (is_white or is_black): continue
+        if player_name and not (is_white or is_black):
+            continue
+
+        # Map result from player perspective
+        stat = "draw"
+        if res == "1-0": stat = "win" if is_white else "loss"
+        elif res == "0-1": stat = "win" if is_black else "loss"
 
         board = game.board()
         for move in game.mainline_moves():
-            if (board.turn == chess.WHITE and is_white) or (board.turn == chess.BLACK and is_black):
-                fen_parts = board.fen().split(' ')
-                fen_key = " ".join(fen_parts[:4])
-                move_db[fen_key][move.uci()] += 1
+            if not player_name or (board.turn == chess.WHITE and is_white) or (board.turn == chess.BLACK and is_black):
+                fen = ingest.get_fen_key(board)
+                move_uci = move.uci()
+                
+                if fen not in move_db: move_db[fen] = {}
+                if move_uci not in move_db[fen]:
+                    move_db[fen][move_uci] = {"count": 0, "win": 0, "loss": 0, "draw": 0}
+                
+                m = move_db[fen][move_uci]
+                m["count"] += 1
+                m[stat] += 1
+                
             board.push(move)
-        count += 1
 
-    # Save opponent model
-    model_path = os.path.join(OPPONENTS_DIR, f"{opponent_name}.json")
-    serializable_db = {k: dict(v) for k, v in move_db.items()}
-    with open(model_path, 'w') as f:
-        json.dump(serializable_db, f)
+    return jsonify(move_db)
+
+@app.route('/games', methods=['GET'])
+def list_games():
+    return jsonify(database.get_all_games())
+
+@app.route('/games/<int:game_id>', methods=['GET'])
+def get_game(game_id):
+    games = database.get_all_games()
+    game = next((g for g in games if g['id'] == game_id), None)
+    if not game:
+        return jsonify({"error": "Game not found"}), 404
+    
+    # Parse PGN to get move list
+    pgn_io = io.StringIO(game['pgn'])
+    parsed_game = chess.pgn.read_game(pgn_io)
+    moves = []
+    board = parsed_game.board()
+    for move in parsed_game.mainline_moves():
+        moves.append({
+            "san": board.san(move),
+            "fen": board.fen() # Position AFTER the move
+        })
+        board.push(move)
         
-    return jsonify({"success": True, "games_processed": count, "opponent": opponent_name})
+    return jsonify({
+        "id": game['id'],
+        "white": game['white'],
+        "black": game['black'],
+        "date": game['date'],
+        "result": game['result'],
+        "moves": moves,
+        "initial_fen": chess.STARTING_FEN
+    })
+
+@app.route('/games/<int:game_id>', methods=['DELETE'])
+def remove_game(game_id):
+    database.delete_game(game_id)
+    return jsonify({"success": True})
+
+@app.route('/analyze')
+def analyze_fen():
+    fen = request.args.get('fen', chess.STARTING_FEN)
+    engine_path = os.path.join(BASE_DIR, "engines", "stockfish")
+    
+    if not os.path.exists(engine_path):
+        return jsonify({"error": "Engine not found at " + engine_path}), 404
+
+    board = chess.Board(fen)
+    with chess.engine.SimpleEngine.popen_uci(engine_path) as engine:
+        # Request top 3 lines
+        results = engine.analyse(board, chess.engine.Limit(time=0.1), multipv=3)
+        
+        analysis_data = []
+        for res in results:
+            score = res["score"].white()
+            score_val = score.score() if score.score() is not None else (10000 if score.mate() > 0 else -10000)
+            
+            analysis_data.append({
+                "best_move": res["pv"][0].uci(),
+                "score": score_val,
+                "pv": [m.uci() for m in res["pv"][:5]]
+            })
+        
+        return jsonify(analysis_data)
 
 if __name__ == '__main__':
-    print("Starting Chess Mimic Web UI on port 5000...")
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)
