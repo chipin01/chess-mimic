@@ -53,6 +53,7 @@
                     <button onclick="showTab('tree')" id="tab-tree" class="flex-1 py-3 text-sm font-medium active-tab">Opening Tree</button>
                     <button onclick="showTab('games')" id="tab-games" class="flex-1 py-3 text-sm font-medium text-gray-400">Games</button>
                     <button onclick="showTab('moves')" id="tab-moves" class="flex-1 py-3 text-sm font-medium text-gray-400">Moves</button>
+                    <button onclick="showTab('puzzles')" id="tab-puzzles" class="flex-1 py-3 text-sm font-medium text-gray-400">Puzzles</button>
                     <button onclick="showTab('analysis')" id="tab-analysis" class="flex-1 py-3 text-sm font-medium text-gray-400">Analysis</button>
                 </div>
 
@@ -80,6 +81,12 @@
                             <div class="flex justify-end mt-2">
                                 <button onclick="saveAnnotation()" class="bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded text-xs font-medium">Save Note</button>
                             </div>
+                        </div>
+                    </div>
+                    <div id="content-puzzles" class="tab-content hidden">
+                        <button onclick="findPuzzles()" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded text-xs font-bold mb-4">Find Mistakes & Blunders</button>
+                        <div id="puzzle-list" class="space-y-2">
+                            <div class="text-gray-500 text-xs italic text-center">Load a game and click the button above to generate practice puzzles.</div>
                         </div>
                     </div>
                     <div id="content-analysis" class="tab-content hidden">
@@ -239,6 +246,28 @@
             board.position(game.fen());
             updateUI();
             fetchAnalysis();
+        }
+
+        function findPuzzles() {
+            if (!selectedGameId) return alert("Select a game first!");
+            $('#puzzle-list').html('<div class="text-xs text-blue-400 italic animate-pulse text-center">Stockfish is scanning for blunders...</div>');
+            $.get(`/games/${selectedGameId}/puzzles`, function(puzzles) {
+                const $list = $('#puzzle-list').empty();
+                if (puzzles.length === 0) {
+                    $list.html('<div class="text-gray-500 text-xs text-center">No major blunders found in this game! Good job.</div>');
+                    return;
+                }
+                puzzles.forEach((p, i) => {
+                    const diff = Math.abs(p.score_before - p.score_after) / 100;
+                    $list.append(`<div class="bg-gray-750 p-3 rounded border border-red-900/30 hover:border-red-500 cursor-pointer transition" onclick="jumpToFen('${p.fen}')">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-bold text-red-400">Blunder (Move ${p.move_number})</span>
+                            <span class="text-[10px] text-gray-500">-${diff.toFixed(1)}</span>
+                        </div>
+                        <div class="text-[10px] text-gray-400 mt-1">Best move was: <span class="font-mono text-green-400">${p.best_move}</span></div>
+                    </div>`);
+                });
+            });
         }
 
         function saveAnnotation() {

@@ -195,6 +195,55 @@ def annotate_move(game_id):
     database.update_game(game_id, annotations=json.dumps(annotations))
     return jsonify({"success": True})
 
+@app.route('/games/<int:game_id>/puzzles', methods=['GET'])
+def get_game_puzzles(game_id):
+    games = database.get_all_games()
+    game = next((g for g in games if g['id'] == game_id), None)
+    if not game:
+        return jsonify({"error": "Game not found"}), 404
+
+    pgn_io = io.StringIO(game['pgn'])
+    parsed_game = chess.pgn.read_game(pgn_io)
+    board = parsed_game.board()
+    engine_path = os.path.join(BASE_DIR, "engines", "stockfish")
+    
+    puzzles = []
+    
+    # We'll use a slightly higher depth for puzzle finding
+    with chess.engine.SimpleEngine.popen_uci(engine_path) as engine:
+        prev_eval = 0
+        for i, move in enumerate(parsed_game.mainline_moves()):
+            # Position BEFORE the move (where the mistake might happen)
+            fen_before = board.fen()
+            
+            # Analyze best move
+            info = engine.analyse(board, chess.engine.Limit(time=0.1))
+            best_move = info["pv"][0]
+            
+            score = info["score"].white()
+            current_eval = score.score() if score.score() is not None else (10000 if score.mate() > 0 else -10000)
+            
+            # If the actual move played was significantly worse than the best move
+            # OR if there was a massive swing in evaluation
+            if i > 0:
+                eval_diff = abs(current_eval - prev_eval)
+                # If evaluation dropped by more than 150 centipawns (1.5)
+                # and the player made a blunder
+                if eval_diff > 150:
+                    puzzles.append({
+                        "fen": fen_before,
+                        "best_move": best_move.uci(),
+                        "score_before": prev_eval,
+                        "score_after": current_eval,
+                        "move_number": (i // 2) + 1,
+                        "turn": "white" if board.turn == chess.WHITE else "black"
+                    })
+            
+            prev_eval = current_eval
+            board.push(move)
+            
+    return jsonify(puzzles)
+
 @app.route('/analyze')
 def analyze_fen():
     fen = request.args.get('fen', chess.STARTING_FEN)
