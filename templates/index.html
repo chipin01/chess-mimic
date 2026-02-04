@@ -13,39 +13,13 @@
         .active-tab { border-bottom: 2px solid #3b82f6; color: #3b82f6; }
         .highlight-player { color: #3b82f6; font-weight: bold; }
         #board-container { position: relative; }
-        #arrow-svg { 
-            position: absolute; 
-            top: 0; 
-            left: 0; 
-            width: 100%; 
-            height: 100%; 
-            pointer-events: none; 
-            z-index: 100; /* Ensure arrows are above the board */
-        }
-        #eval-bar-v { 
-            width: 30px; 
-            flex-shrink: 0; 
-            background: #374151; 
-            border-radius: 2px; 
-            overflow: visible; /* Allow text to be seen if overflowed */
-            display: flex; 
-            flex-direction: column-reverse; 
-            position: relative; 
-        }
+        #arrow-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 100; }
+        #eval-bar-v { width: 30px; flex-shrink: 0; background: #374151; border-radius: 2px; overflow: visible; display: flex; flex-direction: column-reverse; position: relative; }
         #eval-white-v { background: white; width: 100%; transition: height 0.5s ease; }
-        #eval-num { 
-            position: absolute; 
-            width: 100%; 
-            text-align: center; 
-            font-size: 11px; 
-            font-weight: bold; 
-            color: #ff00ff; /* Bright magenta for debugging visibility */
-            z-index: 50; 
-            top: 50%; 
-            transform: translateY(-50%);
-            pointer-events: none;
-            text-shadow: 1px 1px 1px black;
-        }
+        #eval-num { position: absolute; width: 100%; text-align: center; font-size: 11px; font-weight: bold; color: #ff00ff; z-index: 50; top: 50%; transform: translateY(-50%); pointer-events: none; text-shadow: 1px 1px 1px black; }
+        .move-btn { background: #374151; border: 1px solid transparent; }
+        .move-btn.active { border-color: #3b82f6; background: #1e3a8a; }
+        .comment-indicator { color: #fbbf24; margin-left: 2px; }
     </style>
 </head>
 <body class="bg-gray-900 text-white font-sans overflow-hidden">
@@ -69,7 +43,6 @@
                     </div>
                     <div class="relative flex-1">
                         <div id="myBoard" class="w-full"></div>
-                        <!-- SVG for arrows -->
                         <svg id="arrow-svg"></svg>
                     </div>
                 </div>
@@ -93,13 +66,20 @@
                         </table>
                     </div>
                     <div id="content-games" class="tab-content hidden"><div id="game-list" class="space-y-2"></div></div>
-                    <div id="content-moves" class="tab-content hidden">
+                    <div id="content-moves" class="tab-content hidden flex flex-col h-full">
                         <div id="active-game-header" class="mb-4 pb-2 border-b border-gray-700 hidden">
                             <div class="font-bold text-blue-400" id="ag-players"></div>
                             <div class="text-xs text-gray-400" id="ag-meta"></div>
                         </div>
-                        <div id="move-list" class="flex flex-wrap gap-1">
-                            <div class="text-gray-500 text-xs italic">Select a game from the Games tab to view moves...</div>
+                        <div id="move-list" class="flex flex-wrap gap-1 mb-4">
+                            <div class="text-gray-500 text-xs italic text-center w-full">Select a game from the Games tab...</div>
+                        </div>
+                        <div id="annotation-box" class="mt-auto border-t border-gray-700 pt-4 hidden">
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Move Annotation</label>
+                            <textarea id="comment-input" class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-gray-300 focus:outline-none focus:border-blue-500" rows="3" placeholder="Add notes for this position..."></textarea>
+                            <div class="flex justify-end mt-2">
+                                <button onclick="saveAnnotation()" class="bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded text-xs font-medium">Save Note</button>
+                            </div>
                         </div>
                     </div>
                     <div id="content-analysis" class="tab-content hidden">
@@ -123,7 +103,10 @@
         let board = null;
         let game = new Chess();
         let treeData = {};
-        const ARROW_COLOR = '#60a5fa'; // Greyish blue (Tailwind blue-400)
+        let selectedGameId = null;
+        let currentMoveIndex = -1;
+        let gameMoves = [];
+        const ARROW_COLOR = '#60a5fa';
 
         function onDrop(source, target) {
             let move = game.move({ from: source, to: target, promotion: 'q' });
@@ -134,20 +117,26 @@
         }
 
         function updateUI() {
-            // Force sync height
-            const boardHeight = $('#myBoard').height();
-            if (boardHeight > 0) $('#eval-bar-v').height(boardHeight);
+            const bh = $('#myBoard').height();
+            if (bh > 0) $('#eval-bar-v').height(bh);
 
             const fenKey = game.fen().split(' ').slice(0, 4).join(' ');
             const moves = treeData[fenKey] || {};
             const $body = $('#tree-body').empty();
             Object.keys(moves).sort((a, b) => moves[b].count - moves[a].count).forEach(m => {
                 const s = moves[m];
-                const winRate = ((s.win / s.count) * 100).toFixed(1);
+                const wr = ((s.win / s.count) * 100).toFixed(1);
                 $body.append(`<tr class="border-b border-gray-850 hover:bg-gray-750 cursor-pointer" onclick="playMove('${m}')">
-                    <td class="py-3 font-bold text-blue-300">${m}</td><td class="py-3">${s.count}</td><td class="py-3">${winRate}%</td>
-                    <td class="py-3 text-right text-xs"><span class="text-green-400">${s.win}W</span> / <span class="text-red-400">${s.loss}L</span></td></tr>`);
+                    <td class="py-3 font-bold text-blue-300">${m}</td><td>${s.count}</td><td>${wr}%</td>
+                    <td class="text-right text-xs"><span class="text-green-400">${s.win}W</span> / <span class="text-red-400">${s.loss}L</span></td></tr>`);
             });
+
+            // Update annotation box if in a game
+            if (selectedGameId) {
+                $('#annotation-box').removeClass('hidden');
+                const moveData = gameMoves.find(m => m.fen === game.fen());
+                $('#comment-input').val(moveData ? moveData.comment : '');
+            }
         }
 
         function drawArrow(move, color, opacity, index) {
@@ -156,81 +145,51 @@
             const boardEl = document.getElementById('myBoard');
             const rect = boardEl.getBoundingClientRect();
             const sqSize = rect.width / 8;
-
             const getCoords = (sq) => {
                 const col = sq.charCodeAt(0) - 97;
                 const row = 8 - parseInt(sq[1]);
                 return { x: col * sqSize + sqSize / 2, y: row * sqSize + sqSize / 2 };
             };
-
             const f = getCoords(from), t = getCoords(to);
             const svg = document.getElementById('arrow-svg');
             svg.setAttribute('width', rect.width);
             svg.setAttribute('height', rect.height);
             svg.setAttribute('viewBox', `0 0 ${rect.width} ${rect.height}`);
-
             const markerId = `arrowhead-${index}`;
             let defs = svg.querySelector('defs');
-            if (!defs) {
-                defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-                svg.appendChild(defs);
-            }
-
+            if (!defs) { svg.appendChild(defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs')); }
             const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-            marker.setAttribute('id', markerId);
-            marker.setAttribute('markerWidth', '6');
-            marker.setAttribute('markerHeight', '6');
-            marker.setAttribute('refX', '5');
-            marker.setAttribute('refY', '3');
-            marker.setAttribute('orient', 'auto');
+            marker.setAttribute('id', markerId); marker.setAttribute('markerWidth', '6'); marker.setAttribute('markerHeight', '6');
+            marker.setAttribute('refX', '5'); marker.setAttribute('refY', '3'); marker.setAttribute('orient', 'auto');
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            path.setAttribute('d', 'M0,0 L0,6 L6,3 Z');
-            path.setAttribute('fill', color);
-            path.setAttribute('fill-opacity', opacity);
-            marker.appendChild(path);
-            defs.appendChild(marker);
-
+            path.setAttribute('d', 'M0,0 L0,6 L6,3 Z'); path.setAttribute('fill', color); path.setAttribute('fill-opacity', opacity);
+            marker.appendChild(path); defs.appendChild(marker);
             const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-            line.setAttribute('x1', f.x);
-            line.setAttribute('y1', f.y);
-            line.setAttribute('x2', t.x);
-            line.setAttribute('y2', t.y);
-            line.setAttribute('stroke', color);
-            line.setAttribute('stroke-width', '8'); // Much thicker for visibility
-            line.setAttribute('stroke-opacity', opacity);
+            line.setAttribute('x1', f.x); line.setAttribute('y1', f.y); line.setAttribute('x2', t.x); line.setAttribute('y2', t.y);
+            line.setAttribute('stroke', color); line.setAttribute('stroke-width', '8'); line.setAttribute('stroke-opacity', opacity);
             line.setAttribute('marker-end', `url(#${markerId})`);
             svg.appendChild(line);
         }
 
         function fetchAnalysis() {
-            $('#engine-status').text('Engine: Thinking...');
             const svg = document.getElementById('arrow-svg');
             while (svg.firstChild) svg.removeChild(svg.firstChild);
-            
             $.get('/analyze?fen=' + encodeURIComponent(game.fen()), function(data) {
-                $('#engine-status').text('Engine: Ready');
                 if (!data || data.length === 0) return;
-                
+                while (svg.firstChild) svg.removeChild(svg.firstChild);
                 const best = data[0];
-                const score = (best.score / 100).toFixed(1);
-                $('#eval-text').text((score > 0 ? '+' : '') + score);
-                $('#eval-num').text(Math.abs(score));
-                
-                let percent = 50 + (best.score / 10);
-                $('#eval-white-v').css('height', Math.max(5, Math.min(95, percent)) + '%');
-
+                $('#eval-text').text((best.score/100).toFixed(1));
+                $('#eval-num').text(Math.abs(best.score/100).toFixed(1));
+                $('#eval-white-v').css('height', Math.max(5, Math.min(95, 50 + (best.score/10))) + '%');
                 const $lines = $('#engine-lines').empty();
                 data.forEach((line, i) => {
-                    const lScore = (line.score / 100).toFixed(1);
-                    // Higher transparency for lower rank (0=1.0, 1=0.6, 2=0.3)
-                    const opacity = i === 0 ? 0.9 : (i === 1 ? 0.6 : 0.3);
-                    drawArrow(line.best_move, ARROW_COLOR, opacity, i);
-                    $lines.append(`<div class="bg-gray-750 p-2 rounded border text-xs" style="border-color: ${ARROW_COLOR}${Math.floor(opacity*255).toString(16)}">
-                        <div class="flex justify-between items-center mb-1">
+                    const op = i === 0 ? 0.9 : (i === 1 ? 0.6 : 0.3);
+                    drawArrow(line.best_move, ARROW_COLOR, op, i);
+                    $lines.append(`<div class="bg-gray-750 p-2 rounded border text-xs" style="border-color: ${ARROW_COLOR}${Math.floor(op*255).toString(16)}">
+                        <div class="flex justify-between items-center">
                             <span style="color: ${ARROW_COLOR}" class="font-mono font-bold">${line.best_move}</span>
-                            <span class="font-mono">${lScore > 0 ? '+' : ''}${lScore}</span>
-                        </div>
-                    </div>`);
+                            <span class="font-mono">${(line.score/100).toFixed(1)}</span>
+                        </div></div>`);
                 });
             });
         }
@@ -241,103 +200,97 @@
             $(`#tab-${tab}`).addClass('active-tab').removeClass('text-gray-400');
         }
 
-        function playMove(uci) { game.move(uci, { sloppy: true }); board.position(game.fen()); updateUI(); fetchAnalysis(); }
-
-        function loadData() {
-            const player = $('#player-filter').val();
-            $.get('/tree?player=' + player, data => { treeData = data; updateUI(); });
-            $.get('/games', games => {
-                const $list = $('#game-list').empty();
-                games.forEach(g => {
-                    const whiteName = g.white || "Unknown";
-                    const blackName = g.black || "Unknown";
-                    const isWhiteMe = player && whiteName.toLowerCase().includes(player.toLowerCase());
-                    const isBlackMe = player && blackName.toLowerCase().includes(player.toLowerCase());
-                    
-                    $list.append(`<div class="bg-gray-750 p-3 rounded border border-gray-700 text-sm hover:border-blue-500 cursor-pointer transition" onclick="selectGame(${g.id})">
-                        <div class="flex justify-between items-start"><div>
-                            <div class="font-bold">
-                                <span class="${isWhiteMe ? 'highlight-player' : ''}">${whiteName}</span> 
-                                <span class="text-gray-500 mx-1">vs</span> 
-                                <span class="${isBlackMe ? 'highlight-player' : ''}">${blackName}</span>
-                            </div>
-                            <div class="text-gray-400 text-xs">${g.date} • ${g.result}</div>
-                        </div>
-                        <div class="flex flex-col items-end space-y-2">
-                            <button onclick="event.stopPropagation(); deleteGame(${g.id})" class="text-red-500 text-xs">Delete</button>
-                            <div class="flex space-x-1">
-                                <button onclick="event.stopPropagation(); flipBoard('white')" class="bg-gray-600 hover:bg-gray-500 px-1 rounded text-[10px]">W</button>
-                                <button onclick="event.stopPropagation(); flipBoard('black')" class="bg-gray-600 hover:bg-gray-500 px-1 rounded text-[10px]">B</button>
-                            </div>
-                        </div>
-                    </div></div>`);
-                });
-            });
-        }
-
-        function flipBoard(side) {
-            board.orientation(side);
-        }
-
         function selectGame(id) {
-            const currentPlayer = $('#player-filter').val();
+            selectedGameId = id;
+            const player = $('#player-filter').val();
             $.get('/games/' + id, function(data) {
+                gameMoves = data.moves;
                 $('#active-game-header').removeClass('hidden');
                 $('#ag-players').text(`${data.white} vs ${data.black}`);
-                $('#ag-meta').text(`${data.date} • Result: ${data.result}`);
-                
-                // Auto-orient based on player filter
-                if (currentPlayer) {
-                    if (data.white.toLowerCase().includes(currentPlayer.toLowerCase())) board.orientation('white');
-                    else if (data.black.toLowerCase().includes(currentPlayer.toLowerCase())) board.orientation('black');
+                $('#ag-meta').text(`${data.date} • ${data.result}`);
+                if (player) {
+                    if (data.white.toLowerCase().includes(player.toLowerCase())) board.orientation('white');
+                    else if (data.black.toLowerCase().includes(player.toLowerCase())) board.orientation('black');
                 }
-
-                const $mlist = $('#move-list').empty();
-                data.moves.forEach((m, i) => {
-                    const moveNum = Math.floor(i / 2) + 1;
-                    if (i % 2 === 0) {
-                        $mlist.append(`<div class="w-full text-xs text-gray-500 mt-1">Move ${moveNum}</div>`);
-                    }
-                    $mlist.append(`<button onclick="jumpToFen('${m.fen}')" class="bg-gray-700 hover:bg-blue-600 px-2 py-1 rounded text-xs font-mono transition">${m.san}</button>`);
-                });
-                
+                renderMoveList();
                 showTab('moves');
-                game.load(data.initial_fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
-                board.position(game.fen());
-                updateUI();
-                fetchAnalysis();
+                jumpToMove(-1);
             });
         }
 
-        function jumpToFen(fen) {
-            game.load(fen);
-            board.position(fen);
+        function renderMoveList() {
+            const $mlist = $('#move-list').empty();
+            gameMoves.forEach((m, i) => {
+                if (i % 2 === 0) $mlist.append(`<div class="w-full text-[10px] text-gray-500 mt-1">Move ${Math.floor(i/2)+1}</div>`);
+                const hasComment = m.comment ? '<span class="comment-indicator">●</span>' : '';
+                $mlist.append(`<button id="move-btn-${i}" onclick="jumpToMove(${i})" class="move-btn hover:bg-blue-600 px-2 py-1 rounded text-xs font-mono transition">${m.san}${hasComment}</button>`);
+            });
+        }
+
+        function jumpToMove(idx) {
+            currentMoveIndex = idx;
+            $('.move-btn').removeClass('active');
+            if (idx === -1) {
+                game.reset();
+            } else {
+                game.load(gameMoves[idx].fen);
+                $(`#move-btn-${idx}`).addClass('active');
+            }
+            board.position(game.fen());
             updateUI();
             fetchAnalysis();
         }
 
-        function deleteGame(id) { if(confirm('Delete?')) $.ajax({ url: '/games/' + id, type: 'DELETE', success: loadData }); }
+        function saveAnnotation() {
+            if (!selectedGameId) return;
+            const comment = $('#comment-input').val();
+            const fen = game.fen();
+            $.ajax({
+                url: `/games/${selectedGameId}/annotate`,
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ fen: fen, comment: comment }),
+                success: function() {
+                    const m = gameMoves.find(x => x.fen === fen);
+                    if (m) m.comment = comment;
+                    renderMoveList();
+                    $(`#move-btn-${gameMoves.indexOf(m)}`).addClass('active');
+                    alert('Note saved!');
+                }
+            });
+        }
+
+        function loadData() {
+            const p = $('#player-filter').val();
+            $.get('/tree?player=' + p, data => { treeData = data; updateUI(); });
+            $.get('/games', games => {
+                const $list = $('#game-list').empty();
+                games.forEach(g => {
+                    const w = g.white || "?", b = g.black || "?";
+                    const isW = p && w.toLowerCase().includes(p.toLowerCase()), isB = p && b.toLowerCase().includes(p.toLowerCase());
+                    $list.append(`<div class="bg-gray-750 p-3 rounded border border-gray-700 text-sm hover:border-blue-500 cursor-pointer" onclick="selectGame(${g.id})">
+                        <div class="flex justify-between items-start"><div><div class="font-bold"><span class="${isW?'highlight-player':''}">${w}</span> vs <span class="${isB?'highlight-player':''}">${b}</span></div>
+                        <div class="text-gray-400 text-xs">${g.date} • ${g.result}</div></div>
+                        <div class="flex flex-col items-end space-y-2"><button onclick="event.stopPropagation(); deleteGame(${g.id})" class="text-red-500 text-xs">Delete</button>
+                        <div class="flex space-x-1"><button onclick="event.stopPropagation(); flipBoard('white')" class="bg-gray-600 px-1 rounded text-[10px]">W</button>
+                        <button onclick="event.stopPropagation(); flipBoard('black')" class="bg-gray-600 px-1 rounded text-[10px]">B</button></div></div></div></div>`);
+                });
+            });
+        }
+
+        function deleteGame(id) { if(confirm('Delete?')) $.ajax({ url: '/games/'+id, type: 'DELETE', success: loadData }); }
+        function flipBoard(s) { board.orientation(s); }
         $('#pgn-upload').change(function(e) {
             const fd = new FormData(); fd.append('file', e.target.files[0]);
             $.ajax({ url: '/upload', type: 'POST', data: fd, processData: false, contentType: false, success: loadData });
         });
         $('#player-filter').on('input', loadData);
-        
-        board = Chessboard('myBoard', { 
-            draggable: true, 
-            position: 'start', 
-            onDrop: onDrop, 
-            moveSpeed: 0, 
-            snapSpeed: 0, 
-            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png' 
-        });
-        
+        board = Chessboard('myBoard', { draggable: true, position: 'start', onDrop: onDrop, moveSpeed: 0, snapSpeed: 0, pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png' });
         loadData();
-        setTimeout(updateUI, 500); // Wait for board render to sync heights
-
-        $('#btn-start').click(() => { game.reset(); board.start(); updateUI(); const svg = document.getElementById('arrow-svg'); while (svg.firstChild) svg.removeChild(svg.firstChild); });
-        $('#btn-prev').click(() => { game.undo(); board.position(game.fen()); updateUI(); fetchAnalysis(); });
-        $('#btn-next').click(() => { /* Add logic for next move if viewing game */ });
+        $('#btn-start').click(() => jumpToMove(-1));
+        $('#btn-prev').click(() => jumpToMove(currentMoveIndex - 1));
+        $('#btn-next').click(() => jumpToMove(currentMoveIndex + 1));
+        $('#btn-end').click(() => jumpToMove(gameMoves.length - 1));
     </script>
 </body>
 </html>

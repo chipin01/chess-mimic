@@ -140,10 +140,22 @@ def get_game(game_id):
     parsed_game = chess.pgn.read_game(pgn_io)
     moves = []
     board = parsed_game.board()
-    for move in parsed_game.mainline_moves():
+    
+    # Load move annotations from DB
+    import json
+    db_annotations = {}
+    if game.get('annotations'):
+        try:
+            db_annotations = json.loads(game['annotations'])
+        except:
+            pass
+
+    for i, move in enumerate(parsed_game.mainline_moves()):
+        fen_after = board.fen()
         moves.append({
             "san": board.san(move),
-            "fen": board.fen() # Position AFTER the move
+            "fen": fen_after,
+            "comment": db_annotations.get(fen_after, "")
         })
         board.push(move)
         
@@ -160,6 +172,27 @@ def get_game(game_id):
 @app.route('/games/<int:game_id>', methods=['DELETE'])
 def remove_game(game_id):
     database.delete_game(game_id)
+    return jsonify({"success": True})
+
+@app.route('/games/<int:game_id>/annotate', methods=['POST'])
+def annotate_move(game_id):
+    data = request.json
+    fen = data.get('fen')
+    comment = data.get('comment')
+    
+    # Load existing
+    games = database.get_all_games()
+    game = next((g for g in games if g['id'] == game_id), None)
+    if not game: return jsonify({"error": "No game"}), 404
+    
+    import json
+    annotations = {}
+    if game.get('annotations'):
+        try: annotations = json.loads(game['annotations'])
+        except: pass
+        
+    annotations[fen] = comment
+    database.update_game(game_id, annotations=json.dumps(annotations))
     return jsonify({"success": True})
 
 @app.route('/analyze')
