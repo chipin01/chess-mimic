@@ -379,11 +379,13 @@
 
         // Hotkeys for navigation
         $(document).keydown(function(e) {
-            if ($("textarea, input").is(":focus")) return; // Don't trigger while typing
+            if ($("textarea, input").is(":focus")) return;
             
-            if (e.which === 37) { // Left arrow
+            if (e.which === 37) { // Left
+                e.preventDefault();
                 jumpToMove(currentMoveIndex - 1);
-            } else if (e.which === 39) { // Right arrow
+            } else if (e.which === 39) { // Right
+                e.preventDefault();
                 jumpToMove(currentMoveIndex + 1);
             }
         });
