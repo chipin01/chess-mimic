@@ -20,6 +20,14 @@
         .move-btn { background: #374151; border: 1px solid transparent; }
         .move-btn.active { border-color: #3b82f6; background: #1e3a8a; }
         .comment-indicator { color: #fbbf24; margin-left: 2px; }
+
+        /* Switch styling */
+        .switch { position: relative; display: inline-block; width: 34px; height: 20px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #4b5563; transition: .4s; border-radius: 20px; }
+        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #3b82f6; }
+        input:checked + .slider:before { transform: translateX(14px); }
     </style>
 </head>
 <body class="bg-gray-900 text-white font-sans overflow-hidden">
@@ -27,6 +35,13 @@
         <header class="bg-gray-800 p-3 border-b border-gray-700 flex justify-between items-center">
             <h1 class="text-xl font-bold text-blue-400">♟️ Chess Mimic</h1>
             <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-2 mr-4">
+                    <span class="text-[10px] text-gray-400 uppercase font-bold">Engine</span>
+                    <label class="switch">
+                        <input type="checkbox" id="engine-toggle" checked onchange="toggleEngine()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
                 <div id="engine-status" class="text-xs text-gray-500 font-mono">Engine: Idle</div>
                 <input type="text" id="player-filter" placeholder="Filter by Player..." class="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm focus:outline-none">
                 <input type="file" id="pgn-upload" class="hidden">
@@ -35,8 +50,9 @@
         </header>
 
         <main class="flex flex-1 overflow-hidden">
-            <div class="flex-1 p-6 flex items-center justify-center bg-gray-850">
-                <div id="board-container" class="relative w-full max-w-[600px] flex space-x-2 h-fit items-start">
+            <!-- Left Panel: Large Board (2/3 width) -->
+            <div class="w-2/3 p-6 flex items-center justify-center bg-gray-850">
+                <div id="board-container" class="relative w-full max-w-[800px] flex space-x-2 h-fit items-start">
                     <div id="eval-bar-v" class="border border-gray-700">
                         <div id="eval-num">0.0</div>
                         <div id="eval-white-v" style="height: 50%"></div>
@@ -48,13 +64,14 @@
                 </div>
             </div>
 
-            <div class="w-[400px] bg-gray-800 border-l border-gray-700 flex flex-col">
-                <div class="flex border-b border-gray-700">
-                    <button onclick="showTab('tree')" id="tab-tree" class="flex-1 py-3 text-sm font-medium active-tab">Opening Tree</button>
-                    <button onclick="showTab('games')" id="tab-games" class="flex-1 py-3 text-sm font-medium text-gray-400">Games</button>
-                    <button onclick="showTab('moves')" id="tab-moves" class="flex-1 py-3 text-sm font-medium text-gray-400">Moves</button>
-                    <button onclick="showTab('puzzles')" id="tab-puzzles" class="flex-1 py-3 text-sm font-medium text-gray-400">Puzzles</button>
-                    <button onclick="showTab('analysis')" id="tab-analysis" class="flex-1 py-3 text-sm font-medium text-gray-400">Analysis</button>
+            <!-- Right Panel: Tabs (1/3 width) -->
+            <div class="w-1/3 bg-gray-800 border-l border-gray-700 flex flex-col">
+                <div class="flex border-b border-gray-700 text-center">
+                    <button onclick="showTab('tree')" id="tab-tree" class="flex-1 py-3 text-xs font-medium active-tab uppercase">Tree</button>
+                    <button onclick="showTab('games')" id="tab-games" class="flex-1 py-3 text-xs font-medium text-gray-400 uppercase">Games</button>
+                    <button onclick="showTab('moves')" id="tab-moves" class="flex-1 py-3 text-xs font-medium text-gray-400 uppercase">Moves</button>
+                    <button onclick="showTab('puzzles')" id="tab-puzzles" class="flex-1 py-3 text-xs font-medium text-gray-400 uppercase">Puzzles</button>
+                    <button onclick="showTab('analysis')" id="tab-analysis" class="flex-1 py-3 text-xs font-medium text-gray-400 uppercase">Engine</button>
                 </div>
 
                 <div class="flex-1 overflow-y-auto p-4">
@@ -69,25 +86,23 @@
                     <div id="content-games" class="tab-content hidden"><div id="game-list" class="space-y-2"></div></div>
                     <div id="content-moves" class="tab-content hidden flex flex-col h-full">
                         <div id="active-game-header" class="mb-4 pb-2 border-b border-gray-700 hidden">
-                            <div class="font-bold text-blue-400" id="ag-players"></div>
-                            <div class="text-xs text-gray-400" id="ag-meta"></div>
+                            <div class="font-bold text-blue-400 text-sm" id="ag-players"></div>
+                            <div class="text-[10px] text-gray-400" id="ag-meta"></div>
                         </div>
                         <div id="move-list" class="flex flex-wrap gap-1 mb-4">
-                            <div class="text-gray-500 text-xs italic text-center w-full">Select a game from the Games tab...</div>
+                            <div class="text-gray-500 text-xs italic text-center w-full">Select a game...</div>
                         </div>
                         <div id="annotation-box" class="mt-auto border-t border-gray-700 pt-4 hidden">
-                            <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Move Annotation</label>
-                            <textarea id="comment-input" class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-gray-300 focus:outline-none focus:border-blue-500" rows="3" placeholder="Add notes for this position..."></textarea>
+                            <label class="block text-[10px] font-bold text-gray-500 uppercase mb-2">Move Annotation</label>
+                            <textarea id="comment-input" class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-gray-300 focus:outline-none focus:border-blue-500" rows="3" placeholder="Add notes..."></textarea>
                             <div class="flex justify-end mt-2">
                                 <button onclick="saveAnnotation()" class="bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded text-xs font-medium">Save Note</button>
                             </div>
                         </div>
                     </div>
                     <div id="content-puzzles" class="tab-content hidden">
-                        <button onclick="findPuzzles()" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded text-xs font-bold mb-4">Find Mistakes & Blunders</button>
-                        <div id="puzzle-list" class="space-y-2">
-                            <div class="text-gray-500 text-xs italic text-center">Load a game and click the button above to generate practice puzzles.</div>
-                        </div>
+                        <button onclick="findPuzzles()" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded text-xs font-bold mb-4">Scan for Blunders</button>
+                        <div id="puzzle-list" class="space-y-2"></div>
                     </div>
                     <div id="content-analysis" class="tab-content hidden">
                         <div id="engine-lines" class="space-y-3"></div>
@@ -123,6 +138,14 @@
             fetchAnalysis();
         }
 
+        function toggleEngine() {
+            if (!$('#engine-toggle').is(':checked')) {
+                const svg = document.getElementById('arrow-svg');
+                while (svg.firstChild) svg.removeChild(svg.firstChild);
+            }
+            fetchAnalysis();
+        }
+
         function updateUI() {
             const bh = $('#myBoard').height();
             if (bh > 0) $('#eval-bar-v').height(bh);
@@ -134,11 +157,10 @@
                 const s = moves[m];
                 const wr = ((s.win / s.count) * 100).toFixed(1);
                 $body.append(`<tr class="border-b border-gray-850 hover:bg-gray-750 cursor-pointer" onclick="playMove('${m}')">
-                    <td class="py-3 font-bold text-blue-300">${m}</td><td>${s.count}</td><td>${wr}%</td>
-                    <td class="text-right text-xs"><span class="text-green-400">${s.win}W</span> / <span class="text-red-400">${s.loss}L</span></td></tr>`);
+                    <td class="py-3 font-bold text-blue-300 text-xs">${m}</td><td class="text-xs">${s.count}</td><td class="text-xs">${wr}%</td>
+                    <td class="text-right text-[10px]"><span class="text-green-400">${s.win}W</span> / <span class="text-red-400">${s.loss}L</span></td></tr>`);
             });
 
-            // Update annotation box if in a game
             if (selectedGameId) {
                 $('#annotation-box').removeClass('hidden');
                 const moveData = gameMoves.find(m => m.fen === game.fen());
@@ -173,7 +195,7 @@
             marker.appendChild(path); defs.appendChild(marker);
             const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
             line.setAttribute('x1', f.x); line.setAttribute('y1', f.y); line.setAttribute('x2', t.x); line.setAttribute('y2', t.y);
-            line.setAttribute('stroke', color); line.setAttribute('stroke-width', '8'); line.setAttribute('stroke-opacity', opacity);
+            line.setAttribute('stroke', color); line.setAttribute('stroke-width', '10'); line.setAttribute('stroke-opacity', opacity);
             line.setAttribute('marker-end', `url(#${markerId})`);
             svg.appendChild(line);
         }
@@ -181,13 +203,23 @@
         function fetchAnalysis() {
             const svg = document.getElementById('arrow-svg');
             while (svg.firstChild) svg.removeChild(svg.firstChild);
+            
+            if (!$('#engine-toggle').is(':checked')) {
+                $('#engine-status').text('Engine: Disabled');
+                return;
+            }
+
+            $('#engine-status').text('Engine: Thinking...');
             $.get('/analyze?fen=' + encodeURIComponent(game.fen()), function(data) {
                 if (!data || data.length === 0) return;
                 while (svg.firstChild) svg.removeChild(svg.firstChild);
+                $('#engine-status').text('Engine: Ready');
                 const best = data[0];
-                $('#eval-text').text((best.score/100).toFixed(1));
-                $('#eval-num').text(Math.abs(best.score/100).toFixed(1));
+                const score = (best.score/100).toFixed(1);
+                $('#eval-text').text((score > 0 ? '+' : '') + score);
+                $('#eval-num').text(Math.abs(score));
                 $('#eval-white-v').css('height', Math.max(5, Math.min(95, 50 + (best.score/10))) + '%');
+                
                 const $lines = $('#engine-lines').empty();
                 data.forEach((line, i) => {
                     const op = i === 0 ? 0.9 : (i === 1 ? 0.6 : 0.3);
@@ -228,7 +260,7 @@
         function renderMoveList() {
             const $mlist = $('#move-list').empty();
             gameMoves.forEach((m, i) => {
-                if (i % 2 === 0) $mlist.append(`<div class="w-full text-[10px] text-gray-500 mt-1">Move ${Math.floor(i/2)+1}</div>`);
+                if (i % 2 === 0) $mlist.append(`<div class="w-full text-[9px] text-gray-500 mt-1 uppercase font-bold">Move ${Math.floor(i/2)+1}</div>`);
                 const hasComment = m.comment ? '<span class="comment-indicator">●</span>' : '';
                 $mlist.append(`<button id="move-btn-${i}" onclick="jumpToMove(${i})" class="move-btn hover:bg-blue-600 px-2 py-1 rounded text-xs font-mono transition">${m.san}${hasComment}</button>`);
             });
@@ -248,13 +280,22 @@
             fetchAnalysis();
         }
 
+        function jumpToFen(fen) {
+            // Turn off engine automatically when jumping to a blunder
+            $('#engine-toggle').prop('checked', false);
+            game.load(fen);
+            board.position(fen);
+            updateUI();
+            fetchAnalysis();
+        }
+
         function findPuzzles() {
             if (!selectedGameId) return alert("Select a game first!");
-            $('#puzzle-list').html('<div class="text-xs text-blue-400 italic animate-pulse text-center">Stockfish is scanning for blunders...</div>');
+            $('#puzzle-list').html('<div class="text-xs text-blue-400 italic animate-pulse text-center">Scanning for blunders...</div>');
             $.get(`/games/${selectedGameId}/puzzles`, function(puzzles) {
                 const $list = $('#puzzle-list').empty();
                 if (puzzles.length === 0) {
-                    $list.html('<div class="text-gray-500 text-xs text-center">No major blunders found in this game! Good job.</div>');
+                    $list.html('<div class="text-gray-500 text-xs text-center">No major blunders found.</div>');
                     return;
                 }
                 puzzles.forEach((p, i) => {
@@ -264,7 +305,7 @@
                             <span class="text-xs font-bold text-red-400">Blunder (Move ${p.move_number})</span>
                             <span class="text-[10px] text-gray-500">-${diff.toFixed(1)}</span>
                         </div>
-                        <div class="text-[10px] text-gray-400 mt-1">Best move was: <span class="font-mono text-green-400">${p.best_move}</span></div>
+                        <div class="text-[10px] text-gray-400 mt-1">Practice this position</div>
                     </div>`);
                 });
             });
@@ -298,11 +339,11 @@
                     const w = g.white || "?", b = g.black || "?";
                     const isW = p && w.toLowerCase().includes(p.toLowerCase()), isB = p && b.toLowerCase().includes(p.toLowerCase());
                     $list.append(`<div class="bg-gray-750 p-3 rounded border border-gray-700 text-sm hover:border-blue-500 cursor-pointer" onclick="selectGame(${g.id})">
-                        <div class="flex justify-between items-start"><div><div class="font-bold"><span class="${isW?'highlight-player':''}">${w}</span> vs <span class="${isB?'highlight-player':''}">${b}</span></div>
-                        <div class="text-gray-400 text-xs">${g.date} • ${g.result}</div></div>
-                        <div class="flex flex-col items-end space-y-2"><button onclick="event.stopPropagation(); deleteGame(${g.id})" class="text-red-500 text-xs">Delete</button>
-                        <div class="flex space-x-1"><button onclick="event.stopPropagation(); flipBoard('white')" class="bg-gray-600 px-1 rounded text-[10px]">W</button>
-                        <button onclick="event.stopPropagation(); flipBoard('black')" class="bg-gray-600 px-1 rounded text-[10px]">B</button></div></div></div></div>`);
+                        <div class="flex justify-between items-start"><div><div class="font-bold text-xs"><span class="${isW?'highlight-player':''}">${w}</span> vs <span class="${isB?'highlight-player':''}">${b}</span></div>
+                        <div class="text-gray-400 text-[10px]">${g.date} • ${g.result}</div></div>
+                        <div class="flex flex-col items-end space-y-2"><button onclick="event.stopPropagation(); deleteGame(${g.id})" class="text-red-500 text-[10px]">Delete</button>
+                        <div class="flex space-x-1"><button onclick="event.stopPropagation(); flipBoard('white')" class="bg-gray-600 px-1 rounded text-[9px]">W</button>
+                        <button onclick="event.stopPropagation(); flipBoard('black')" class="bg-gray-600 px-1 rounded text-[9px]">B</button></div></div></div></div>`);
                 });
             });
         }
@@ -316,6 +357,7 @@
         $('#player-filter').on('input', loadData);
         board = Chessboard('myBoard', { draggable: true, position: 'start', onDrop: onDrop, moveSpeed: 0, snapSpeed: 0, pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png' });
         loadData();
+        setTimeout(updateUI, 500);
         $('#btn-start').click(() => jumpToMove(-1));
         $('#btn-prev').click(() => jumpToMove(currentMoveIndex - 1));
         $('#btn-next').click(() => jumpToMove(currentMoveIndex + 1));
