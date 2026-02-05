@@ -17,9 +17,9 @@
         #eval-bar-v { width: 30px; flex-shrink: 0; background: #374151; border-radius: 2px; overflow: visible; display: flex; flex-direction: column-reverse; position: relative; }
         #eval-white-v { background: white; width: 100%; transition: height 0.5s ease; }
         #eval-num { position: absolute; width: 100%; text-align: center; font-size: 11px; font-weight: bold; color: #ff00ff; z-index: 50; top: 50%; transform: translateY(-50%); pointer-events: none; text-shadow: 1px 1px 1px black; }
-        .move-btn { background: #374151; border: 1px solid transparent; width: 45%; }
+        .move-btn { background: #374151; border: 1px solid transparent; flex: 1; min-width: 45%; max-width: 48%; }
         .move-btn.active { border-color: #3b82f6; background: #1e3a8a; font-weight: bold; }
-        .comment-display { width: 100%; font-size: 10px; color: #fbbf24; padding: 2px 4px; background: #1f2937; border-radius: 2px; margin-bottom: 4px; }
+        .comment-display { width: 100%; font-size: 10px; color: #fbbf24; padding: 4px 8px; background: #1f2937; border-radius: 4px; margin: 4px 0 8px 0; border-left: 2px solid #fbbf24; }
         .comment-indicator { color: #fbbf24; margin-left: 2px; }
 
         /* Switch styling */
@@ -260,12 +260,16 @@
 
         function renderMoveList() {
             const $mlist = $('#move-list').empty();
+            let $row = null;
+
             gameMoves.forEach((m, i) => {
                 if (i % 2 === 0) {
-                    $mlist.append(`<div class="w-full text-[9px] text-gray-500 mt-2 uppercase font-bold">Move ${Math.floor(i/2)+1}</div>`);
+                    $mlist.append(`<div class="w-full text-[9px] text-gray-500 mt-3 mb-1 uppercase font-bold">Move ${Math.floor(i/2)+1}</div>`);
+                    $row = $('<div class="flex w-full gap-2 mb-1"></div>').appendTo($mlist);
                 }
+                
                 const hasComment = m.comment ? '<span class="comment-indicator">●</span>' : '';
-                $mlist.append(`<button id="move-btn-${i}" onclick="jumpToMove(${i})" class="move-btn hover:bg-blue-600 px-2 py-1 rounded text-xs font-mono transition text-left">${m.san}${hasComment}</button>`);
+                $row.append(`<button id="move-btn-${i}" onclick="jumpToMove(${i})" class="move-btn hover:bg-blue-600 px-2 py-1 rounded text-xs font-mono transition text-left">${m.san}${hasComment}</button>`);
                 
                 if (m.comment) {
                     $mlist.append(`<div class="comment-display italic">${m.comment}</div>`);
@@ -371,6 +375,17 @@
         $('#btn-prev').click(() => jumpToMove(currentMoveIndex - 1));
         $('#btn-next').click(() => jumpToMove(currentMoveIndex + 1));
         $('#btn-end').click(() => jumpToMove(gameMoves.length - 1));
+
+        // Hotkeys for navigation
+        $(document).keydown(function(e) {
+            if ($("textarea, input").is(":focus")) return; // Don't trigger while typing
+            
+            if (e.which === 37) { // Left arrow
+                jumpToMove(currentMoveIndex - 1);
+            } else if (e.which === 39) { // Right arrow
+                jumpToMove(currentMoveIndex + 1);
+            }
+        });
     </script>
 </body>
 </html>
