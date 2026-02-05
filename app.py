@@ -79,11 +79,6 @@ def get_tree():
     player_name = request.args.get('player', '')
     games = database.get_all_games()
     
-    # Simple in-memory tree generation from DB games
-    # This is a placeholder for a more optimized implementation
-    # using the logic from our debugged ingest.py
-    
-    # move_db[fen][move] = stats
     move_db = {} 
     
     for g in games:
@@ -150,15 +145,17 @@ def get_game(game_id):
         except:
             pass
 
-    for i, move in enumerate(parsed_game.mainline_moves()):
+    for move in parsed_game.mainline_moves():
+        san = board.san(move)
+        board.push(move)
         fen_after = board.fen()
         moves.append({
-            "san": board.san(move),
+            "san": san,
             "fen": fen_after,
             "comment": db_annotations.get(fen_after, "")
         })
-        board.push(move)
         
+    initial_fen = parsed_game.board().fen()
     return jsonify({
         "id": game['id'],
         "white": game['white'],
@@ -166,7 +163,7 @@ def get_game(game_id):
         "date": game['date'],
         "result": game['result'],
         "moves": moves,
-        "initial_fen": chess.STARTING_FEN
+        "initial_fen": initial_fen
     })
 
 @app.route('/games/<int:game_id>', methods=['DELETE'])
@@ -209,26 +206,17 @@ def get_game_puzzles(game_id):
     
     puzzles = []
     
-    # We'll use a slightly higher depth for puzzle finding
     with chess.engine.SimpleEngine.popen_uci(engine_path) as engine:
         prev_eval = 0
         for i, move in enumerate(parsed_game.mainline_moves()):
-            # Position BEFORE the move (where the mistake might happen)
             fen_before = board.fen()
-            
-            # Analyze best move
             info = engine.analyse(board, chess.engine.Limit(time=0.1))
             best_move = info["pv"][0]
-            
             score = info["score"].white()
             current_eval = score.score() if score.score() is not None else (10000 if score.mate() > 0 else -10000)
             
-            # If the actual move played was significantly worse than the best move
-            # OR if there was a massive swing in evaluation
             if i > 0:
                 eval_diff = abs(current_eval - prev_eval)
-                # If evaluation dropped by more than 150 centipawns (1.5)
-                # and the player made a blunder
                 if eval_diff > 150:
                     puzzles.append({
                         "fen": fen_before,
