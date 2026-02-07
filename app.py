@@ -12,6 +12,7 @@ import io
 app = Flask(__name__)
 database.init_db()
 
+# Force reload
 @app.route('/')
 def index():
     return render_template('index.html')
