@@ -456,7 +456,11 @@
         function jumpToFen(fen) {
             $('#engine-toggle').prop('checked', false);
             game.load(fen);
-            board.position(fen);
+            
+            // Auto-orient based on whose turn it is
+            board.orientation(game.turn() === 'w' ? 'white' : 'black');
+            
+            board.position(fen, false);
 
             // Sync currentMoveIndex if it exists in gameMoves
             const moveIdx = gameMoves.findIndex(m => m.fen === fen);
