@@ -170,17 +170,36 @@ def get_game_puzzles(game_id):
     puzzles = []
     with chess.engine.SimpleEngine.popen_uci(engine_path) as engine:
         prev_eval = 0
+        prev_fen = None
+        prev_best_move = None
+        prev_move = None
+        
         for i, move in enumerate(parsed_game.mainline_moves()):
-            fen_before = board.fen()
+            current_fen = board.fen()
             info = engine.analyse(board, chess.engine.Limit(time=0.1))
-            best_move = info["pv"][0]
+            current_best_move = info["pv"][0]
+            
             score = info["score"].white()
             current_eval = score.score() if score.score() is not None else (10000 if score.mate() > 0 else -10000)
+            
             if i > 0:
                 eval_diff = abs(current_eval - prev_eval)
                 if eval_diff > 150:
-                    puzzles.append({"fen": fen_before, "best_move": best_move.uci(), "score_before": prev_eval, "score_after": current_eval, "move_number": (i // 2) + 1, "turn": "white" if board.turn == chess.WHITE else "black"})
+                    puzzles.append({
+                        "fen": prev_fen, # Position BEFORE the blunder
+                        "best_move": prev_best_move.uci(), # What should have been played
+                        "played_move": prev_move.uci(), # The bad move
+                        "score_before": prev_eval,
+                        "score_after": current_eval,
+                        "move_number": ((i - 1) // 2) + 1,
+                        "move_index": i - 1,
+                        "turn": "white" if (i - 1) % 2 == 0 else "black"
+                    })
+            
             prev_eval = current_eval
+            prev_fen = current_fen
+            prev_best_move = current_best_move
+            prev_move = move
             board.push(move)
     return jsonify(puzzles)
 
