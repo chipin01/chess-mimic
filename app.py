@@ -160,14 +160,25 @@ def annotate_move(game_id):
 
 @app.route('/games/<int:game_id>/puzzles', methods=['GET'])
 def get_game_puzzles(game_id):
+    puzzles = database.get_puzzles(game_id)
+    return jsonify(puzzles)
+
+@app.route('/games/<int:game_id>/scan', methods=['POST'])
+def scan_game_puzzles(game_id):
     games = database.get_all_games()
     game = next((g for g in games if g['id'] == game_id), None)
     if not game: return jsonify({"error": "No game"}), 404
+    
+    # Clear existing puzzles for this game to avoid duplicates on re-scan
+    with database.get_db() as conn:
+        conn.execute("DELETE FROM puzzles WHERE game_id = ?", (game_id,))
+
     pgn_io = io.StringIO(game['pgn'])
     parsed_game = chess.pgn.read_game(pgn_io)
     board = parsed_game.board()
     engine_path = os.path.join(BASE_DIR, "engines", "stockfish")
-    puzzles = []
+    puzzles_found = 0
+    
     with chess.engine.SimpleEngine.popen_uci(engine_path) as engine:
         prev_eval = 0
         prev_fen = None
@@ -185,23 +196,26 @@ def get_game_puzzles(game_id):
             if i > 0:
                 eval_diff = abs(current_eval - prev_eval)
                 if eval_diff > 150:
-                    puzzles.append({
-                        "fen": prev_fen, # Position BEFORE the blunder
-                        "best_move": prev_best_move.uci(), # What should have been played
-                        "played_move": prev_move.uci(), # The bad move
-                        "score_before": prev_eval,
-                        "score_after": current_eval,
-                        "move_number": ((i - 1) // 2) + 1,
-                        "move_index": i - 1,
-                        "turn": "white" if (i - 1) % 2 == 0 else "black"
-                    })
+                    database.add_puzzle(
+                        game_id=game_id,
+                        fen=prev_fen,
+                        best_move=prev_best_move.uci(),
+                        played_move=prev_move.uci(),
+                        score_before=prev_eval,
+                        score_after=current_eval,
+                        move_number=((i - 1) // 2) + 1,
+                        move_index=i - 1,
+                        turn="white" if (i - 1) % 2 == 0 else "black"
+                    )
+                    puzzles_found += 1
             
             prev_eval = current_eval
             prev_fen = current_fen
             prev_best_move = current_best_move
             prev_move = move
             board.push(move)
-    return jsonify(puzzles)
+            
+    return jsonify({"success": True, "count": puzzles_found})
 
 @app.route('/analyze')
 def analyze_fen():
