@@ -15,12 +15,15 @@ def init_db():
             CREATE TABLE IF NOT EXISTS games (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 pgn TEXT NOT NULL,
+                name TEXT,
                 white TEXT,
                 black TEXT,
                 result TEXT,
                 date TEXT,
                 annotations TEXT,
-                tags TEXT
+                tags TEXT,
+                evals TEXT,
+                folder_id INTEGER REFERENCES folders(id) ON DELETE SET NULL
             )
         """)
         conn.execute("""
@@ -38,13 +41,28 @@ def init_db():
                 FOREIGN KEY(game_id) REFERENCES games(id) ON DELETE CASCADE
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS folders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # Migrate: add missing columns to existing games table
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(games)").fetchall()]
+        if 'folder_id' not in cols:
+            conn.execute("ALTER TABLE games ADD COLUMN folder_id INTEGER REFERENCES folders(id) ON DELETE SET NULL")
+        if 'name' not in cols:
+            conn.execute("ALTER TABLE games ADD COLUMN name TEXT")
+        if 'evals' not in cols:
+            conn.execute("ALTER TABLE games ADD COLUMN evals TEXT")
         conn.commit()
 
-def add_game(pgn, white="", black="", result="", date="", annotations="", tags=""):
+def add_game(pgn, white="", black="", result="", date="", annotations="", tags="", name=None):
     with get_db() as conn:
         cursor = conn.execute(
-            "INSERT INTO games (pgn, white, black, result, date, annotations, tags) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (pgn, white, black, result, date, annotations, tags)
+            "INSERT INTO games (pgn, name, white, black, result, date, annotations, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (pgn, name, white, black, result, date, annotations, tags)
         )
         return cursor.lastrowid
 
@@ -75,6 +93,51 @@ def get_puzzles(game_id):
 def get_all_games():
     with get_db() as conn:
         return [dict(row) for row in conn.execute("SELECT * FROM games").fetchall()]
+
+# --- Folder functions ---
+
+def create_folder(name):
+    with get_db() as conn:
+        cursor = conn.execute("INSERT INTO folders (name) VALUES (?)", (name,))
+        return cursor.lastrowid
+
+def get_all_folders():
+    with get_db() as conn:
+        return [dict(row) for row in conn.execute("SELECT * FROM folders ORDER BY name").fetchall()]
+
+def rename_folder(folder_id, name):
+    with get_db() as conn:
+        conn.execute("UPDATE folders SET name = ? WHERE id = ?", (name, folder_id))
+
+def delete_folder(folder_id, delete_games=False):
+    with get_db() as conn:
+        if delete_games:
+            # Delete all puzzles for games in this folder, then the games
+            game_ids = [r['id'] for r in conn.execute("SELECT id FROM games WHERE folder_id = ?", (folder_id,)).fetchall()]
+            for gid in game_ids:
+                conn.execute("DELETE FROM puzzles WHERE game_id = ?", (gid,))
+                conn.execute("DELETE FROM games WHERE id = ?", (gid,))
+        else:
+            # Move games back to unfiled
+            conn.execute("UPDATE games SET folder_id = NULL WHERE folder_id = ?", (folder_id,))
+        conn.execute("DELETE FROM folders WHERE id = ?", (folder_id,))
+
+def move_game_to_folder(game_id, folder_id):
+    with get_db() as conn:
+        conn.execute("UPDATE games SET folder_id = ? WHERE id = ?", (folder_id, game_id))
+
+def get_folder_stats():
+    """Returns {folder_id: {game_count, puzzle_count}} including None for unfiled."""
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT g.folder_id,
+                   COUNT(DISTINCT g.id) as game_count,
+                   COUNT(p.id) as puzzle_count
+            FROM games g
+            LEFT JOIN puzzles p ON p.game_id = g.id
+            GROUP BY g.folder_id
+        """).fetchall()
+        return {row['folder_id']: {'game_count': row['game_count'], 'puzzle_count': row['puzzle_count']} for row in rows}
 
 if __name__ == "__main__":
     init_db()

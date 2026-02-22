@@ -17,3 +17,10 @@ A specialized engine that learns to play like specific humans by analyzing their
 
 ## Usage
 *Coming soon...*
+
+### Lichess Token
+You will need a Lichess token to access the Lichess API. You can get one by creating an account on [Lichess](https://lichess.org).
+mine is (`your_lichess_token_here`)
+
+### 
+

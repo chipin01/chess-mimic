@@ -66,6 +66,21 @@
             text-shadow: 1px 1px 1px black;
         }
 
+        /* Drag & Drop */
+        .game-draggable.dragging {
+            opacity: 0.4;
+        }
+
+        .folder-drop-zone.drag-over>.folder-header {
+            outline: 2px dashed #3b82f6;
+            outline-offset: -2px;
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .drag-grip:hover {
+            color: #9ca3af;
+        }
+
         .move-btn {
             background: #374151;
             border: 1px solid transparent;
@@ -167,16 +182,20 @@
         </header>
 
         <main class="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
-            <div class="w-full md:w-2/3 p-4 md:p-6 flex items-center justify-center bg-gray-850">
-                <div id="board-container" class="relative w-full max-w-[800px] flex space-x-2 h-fit items-start">
+            <div id="board-area"
+                class="w-full md:w-2/3 p-2 flex flex-col items-center justify-start bg-gray-850 overflow-hidden">
+                <div id="board-container" class="relative flex space-x-2 h-fit items-start">
                     <div id="eval-bar-v" class="border border-gray-700">
                         <div id="eval-num">0.0</div>
                         <div id="eval-white-v" style="height: 50%"></div>
                     </div>
-                    <div class="relative flex-1">
+                    <div id="board-wrapper" class="relative">
                         <div id="myBoard" class="w-full"></div>
                         <svg id="arrow-svg"></svg>
                     </div>
+                </div>
+                <div id="eval-chart-wrap" class="hidden mt-1 cursor-pointer" title="Click to jump to a move">
+                    <canvas id="eval-chart" height="120"></canvas>
                 </div>
             </div>
 
@@ -209,6 +228,38 @@
                         </table>
                     </div>
                     <div id="content-games" class="tab-content hidden">
+                        <!-- Lichess Import Panel -->
+                        <div class="mb-4">
+                            <div class="flex items-center gap-2 cursor-pointer mb-2"
+                                onclick="$('#lichess-panel').toggleClass('hidden')">
+                                <span class="text-[13px]">♞</span>
+                                <span class="text-[11px] font-bold text-purple-300">Import from Lichess</span>
+                                <span class="text-[9px] text-gray-500">▼</span>
+                            </div>
+                            <div id="lichess-panel"
+                                class="hidden bg-gray-800/50 border border-gray-700 rounded p-3 space-y-2">
+                                <div class="flex gap-2">
+                                    <input type="text" id="lichess-username" placeholder="Lichess username"
+                                        class="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-[11px] text-white focus:outline-none focus:border-purple-500">
+                                    <input type="password" id="lichess-token"
+                                        placeholder="API token (optional, for private studies)"
+                                        class="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-[11px] text-white focus:outline-none focus:border-purple-500">
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <button onclick="browseLichessStudies()"
+                                            class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded text-[10px] font-medium">Browse
+                                            Studies</button>
+                                        <button onclick="saveLichessSettings()"
+                                            class="text-[9px] text-gray-400 hover:text-gray-300">Save Settings</button>
+                                    </div>
+                                    <a href="https://lichess.org/account/oauth/token" target="_blank"
+                                        class="text-[9px] text-purple-400 hover:underline">Get API token →</a>
+                                </div>
+                                <div id="lichess-status" class="text-[10px] text-gray-500 italic hidden"></div>
+                                <div id="lichess-studies" class="space-y-1 hidden"></div>
+                            </div>
+                        </div>
                         <div id="game-list" class="space-y-2"></div>
                     </div>
                     <div id="content-moves" class="tab-content hidden flex flex-col h-full">
@@ -261,6 +312,7 @@
         let selectedGameId = null;
         let currentMoveIndex = -1; // -1 is start position
         let gameMoves = [];
+        let gameEvals = [];
         const ARROW_COLOR = '#60a5fa';
 
         function onDrop(source, target) {
@@ -323,9 +375,11 @@
             const boardEl = document.getElementById('myBoard');
             const rect = boardEl.getBoundingClientRect();
             const sqSize = rect.width / 8;
+            const isFlipped = board.orientation() === 'black';
             const getCoords = (sq) => {
-                const col = sq.charCodeAt(0) - 97;
-                const row = 8 - parseInt(sq[1]);
+                let col = sq.charCodeAt(0) - 97;
+                let row = 8 - parseInt(sq[1]);
+                if (isFlipped) { col = 7 - col; row = 7 - row; }
                 return { x: col * sqSize + sqSize / 2, y: row * sqSize + sqSize / 2 };
             };
             const f = getCoords(from), t = getCoords(to);
@@ -363,24 +417,48 @@
 
             $('#engine-status').text('Engine: Thinking...');
             $.get('/analyze?fen=' + encodeURIComponent(game.fen()), function (data) {
-                if (!data || data.length === 0) return;
+                if (!data) return;
                 while (svg.firstChild) svg.removeChild(svg.firstChild);
                 $('#engine-status').text('Engine: Ready');
-                const best = data[0];
-                $('#eval-text').text((best.score / 100).toFixed(1));
-                $('#eval-num').text(Math.abs(best.score / 100).toFixed(1));
-                $('#eval-white-v').css('height', Math.max(5, Math.min(95, 50 + (best.score / 10))) + '%');
 
-                const $lines = $('#engine-lines').empty();
-                data.forEach((line, i) => {
-                    const op = i === 0 ? 0.9 : (i === 1 ? 0.6 : 0.3);
-                    drawArrow(line.best_move, ARROW_COLOR, op, i);
-                    $lines.append(`<div class="bg-gray-750 p-2 rounded border text-xs" style="border-color: ${ARROW_COLOR}${Math.floor(op * 255).toString(16)}">
-                        <div class="flex justify-between items-center">
-                            <span style="color: ${ARROW_COLOR}" class="font-mono font-bold">${line.best_move}</span>
-                            <span class="font-mono">${(line.score / 100).toFixed(1)}</span>
-                        </div></div>`);
-                });
+                // 1. Tactical (Engine)
+                const tactical = data.tactical;
+                if (tactical && tactical.length > 0) {
+                    const best = tactical[0];
+                    $('#eval-text').text((best.score / 100).toFixed(1));
+                    $('#eval-num').text(Math.abs(best.score / 100).toFixed(1));
+                    const whiteHeight = Math.max(5, Math.min(95, 50 + (best.score / 10)));
+                    $('#eval-white-v').css('height', whiteHeight + '%');
+                    // Flip eval bar direction when board is flipped to black
+                    const isBlack = board.orientation() === 'black';
+                    $('#eval-bar-v').css('flex-direction', isBlack ? 'column' : 'column-reverse');
+
+                    const $lines = $('#engine-lines').empty();
+                    $lines.append(`<div class="text-[10px] font-bold text-gray-500 uppercase mb-1">Top Lines</div>`);
+                    tactical.forEach((line, i) => {
+                        const op = i === 0 ? 0.9 : (i === 1 ? 0.6 : 0.3);
+                        drawArrow(line.best_move, ARROW_COLOR, op, i);
+                        $lines.append(`<div class="bg-gray-750 p-2 rounded border text-xs mb-1" style="border-color: ${ARROW_COLOR}${Math.floor(op * 255).toString(16)}">
+                            <div class="flex justify-between items-center">
+                                <span style="color: ${ARROW_COLOR}" class="font-mono font-bold">${line.best_move}</span>
+                                <span class="font-mono">${(line.score / 100).toFixed(1)}</span>
+                            </div></div>`);
+                    });
+                }
+
+                // 2. Positional Insights
+                const positional = data.positional;
+                const $insights = $('#engine-lines'); // Append to same tab for now
+                if (positional && positional.length > 0) {
+                    $insights.append(`<div class="text-[10px] font-bold text-gray-500 uppercase mt-4 mb-2">Positional Insights</div>`);
+                    positional.forEach(p => {
+                        const colorClass = p.severity === 'High' ? 'text-red-400' : (p.severity === 'Good' ? 'text-green-400' : 'text-yellow-400');
+                        $insights.append(`<div class="bg-gray-900/50 p-2 rounded border border-gray-700 text-[10px] mb-1">
+                            <div class="font-bold ${colorClass}">${p.type} (${p.square})</div>
+                            <div class="text-gray-400 italic">${p.description}</div>
+                        </div>`);
+                    });
+                }
             });
         }
 
@@ -395,6 +473,7 @@
             const player = $('#player-filter').val();
             $.get('/games/' + id, function (data) {
                 gameMoves = data.moves;
+                gameEvals = data.evals || [];
                 $('#active-game-header').removeClass('hidden');
                 $('#ag-players').text(`${data.white} vs ${data.black}`);
                 $('#ag-meta').text(`${data.date} • ${data.result}`);
@@ -404,6 +483,7 @@
                 }
                 renderMoveList();
                 showTab('moves');
+                drawEvalChart(gameEvals, -1);
                 if (callback) {
                     callback();
                 } else {
@@ -428,6 +508,138 @@
             });
         }
 
+        // --- Eval Chart ---
+        function drawEvalChart(evals, highlightIdx) {
+            if (!evals || !evals.length) {
+                const wasVisible = !$('#eval-chart-wrap').hasClass('hidden');
+                $('#eval-chart-wrap').addClass('hidden');
+                if (wasVisible) { resizeBoardArea(); board.resize(); const bh = $('#myBoard').height(); if (bh > 0) $('#eval-bar-v').height(bh); }
+                return;
+            }
+            const wasHidden = $('#eval-chart-wrap').hasClass('hidden');
+            const $wrap = $('#eval-chart-wrap').removeClass('hidden');
+            // If chart just became visible, re-compute board size to make room
+            if (wasHidden) {
+                resizeBoardArea();
+                board.resize();
+                const bh = $('#myBoard').height();
+                if (bh > 0) $('#eval-bar-v').height(bh);
+            }
+            const canvas = document.getElementById('eval-chart');
+            const w = $wrap.width();
+            canvas.width = w;
+            const h = canvas.height;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, w, h);
+
+            // Clamp evals to [-1000, 1000] for display (±10 pawns)
+            const maxEval = 1000;
+            const clamped = evals.map(e => Math.max(-maxEval, Math.min(maxEval, e)));
+            const mid = h / 2;
+
+            // Background: top half white tinted, bottom half dark
+            ctx.fillStyle = 'rgba(255,255,255,0.06)';
+            ctx.fillRect(0, 0, w, mid);
+            ctx.fillStyle = 'rgba(0,0,0,0.15)';
+            ctx.fillRect(0, mid, w, mid);
+
+            const toY = (ev) => mid - (ev / maxEval) * mid;
+
+            // Horizontal grid lines at ±1, ±3, ±5 pawns (100, 300, 500 cp)
+            const gridLevels = [100, 300, 500, -100, -300, -500];
+            ctx.setLineDash([2, 3]);
+            ctx.lineWidth = 0.5;
+            gridLevels.forEach(cp => {
+                const gy = toY(cp);
+                ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+                ctx.beginPath();
+                ctx.moveTo(0, gy);
+                ctx.lineTo(w, gy);
+                ctx.stroke();
+                // Label
+                const label = (cp > 0 ? '+' : '') + (cp / 100);
+                ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                ctx.font = '8px sans-serif';
+                ctx.textAlign = 'left';
+                ctx.fillText(label, 3, gy - 2);
+            });
+            ctx.setLineDash([]);
+
+            // Zero line (bolder)
+            ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(0, mid);
+            ctx.lineTo(w, mid);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            // Zero label
+            ctx.fillStyle = 'rgba(255,255,255,0.3)';
+            ctx.font = '9px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('0', 3, mid - 3);
+
+            // Fill area under/above the eval line
+            const step = w / Math.max(clamped.length - 1, 1);
+
+            // Filled area (white = positive, dark = negative)
+            ctx.beginPath();
+            ctx.moveTo(0, mid);
+            for (let i = 0; i < clamped.length; i++) {
+                ctx.lineTo(i * step, toY(clamped[i]));
+            }
+            ctx.lineTo((clamped.length - 1) * step, mid);
+            ctx.closePath();
+            const grad = ctx.createLinearGradient(0, 0, 0, h);
+            grad.addColorStop(0, 'rgba(255,255,255,0.35)');
+            grad.addColorStop(0.5, 'rgba(255,255,255,0.05)');
+            grad.addColorStop(0.5, 'rgba(0,0,0,0.05)');
+            grad.addColorStop(1, 'rgba(50,50,50,0.35)');
+            ctx.fillStyle = grad;
+            ctx.fill();
+
+            // Main eval line
+            ctx.beginPath();
+            for (let i = 0; i < clamped.length; i++) {
+                const x = i * step, y = toY(clamped[i]);
+                i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            }
+            ctx.strokeStyle = 'rgba(200,200,200,0.7)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // Highlight current move indicator
+            if (typeof highlightIdx === 'number' && highlightIdx >= 0 && highlightIdx < clamped.length) {
+                const hx = highlightIdx * step;
+                ctx.strokeStyle = 'rgba(239,68,68,0.8)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(hx, 0);
+                ctx.lineTo(hx, h);
+                ctx.stroke();
+                // Dot on the eval point
+                ctx.fillStyle = '#ef4444';
+                ctx.beginPath();
+                ctx.arc(hx, toY(clamped[highlightIdx]), 3.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function updateChartIndicator() {
+            drawEvalChart(gameEvals, currentMoveIndex);
+        }
+
+        // Click on chart -> jump to that move
+        $('#eval-chart').on('click', function (e) {
+            if (!gameEvals.length || !gameMoves.length) return;
+            const rect = this.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const ratio = x / rect.width;
+            const idx = Math.round(ratio * (gameEvals.length - 1));
+            jumpToMove(Math.max(0, Math.min(idx, gameMoves.length - 1)));
+        });
+
         function jumpToMove(idx) {
             currentMoveIndex = idx;
             if (idx === -1) {
@@ -444,6 +656,7 @@
             board.position(game.fen(), false);
             updateUI();
             fetchAnalysis();
+            updateChartIndicator();
         }
 
         function jumpToFen(fen) {
@@ -507,37 +720,340 @@
         function loadData() {
             const p = $('#player-filter').val();
             $.get('/tree?player=' + p, data => { treeData = data; updateUI(); });
-            $.get('/games', games => {
+
+            // Fetch folders and games together
+            $.when($.get('/folders'), $.get('/games')).done(function (foldersRes, gamesRes) {
+                const folderData = foldersRes[0];
+                const folders = folderData.folders;
+                const unfiled = folderData.unfiled;
+                const games = gamesRes[0];
                 const $list = $('#game-list').empty();
+
+                // "New Folder" button
+                $list.append(`<div class="mb-3">
+                    <button onclick="createFolder()" class="bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded text-[10px] font-medium">+ New Folder</button>
+                </div>`);
+
+                // Group games by folder_id
+                const gamesByFolder = {};
                 games.forEach(g => {
-                    const w = g.white || "?", b = g.black || "?";
-                    const isW = p && w.toLowerCase().includes(p.toLowerCase()), isB = p && b.toLowerCase().includes(p.toLowerCase());
-                    const $item = $(`<div class="bg-gray-750 rounded border border-gray-700 text-sm overflow-hidden mb-2">
-                        <div class="p-3 flex justify-between items-center cursor-pointer hover:bg-gray-700 transition" onclick="toggleGameExpand(${g.id})">
-                            <div class="flex items-center gap-2">
-                                <span id="chevron-${g.id}" class="text-gray-500 text-[10px] transform transition-transform">▶</span>
-                                <div>
-                                    <div class="font-bold text-xs"><span class="${isW ? 'highlight-player' : ''}">${w}</span> vs <span class="${isB ? 'highlight-player' : ''}">${b}</span></div>
-                                    <div class="text-gray-400 text-[10px]">${g.date} • ${g.result}</div>
-                                </div>
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <button onclick="event.stopPropagation(); loadGameMoves(${g.id})" class="text-blue-400 hover:text-blue-300 text-[10px] border border-blue-900/30 px-2 py-1 rounded bg-blue-900/10">LOAD</button>
-                                <button onclick="event.stopPropagation(); requestDelete(${g.id}, this)" class="text-red-500 hover:text-red-400 text-[10px] min-w-[40px] text-right">Delete</button>
-                            </div>
-                        </div>
-                        <div id="game-details-${g.id}" class="hidden border-t border-gray-700 bg-gray-900/50 p-2">
-                            <div class="flex justify-between items-center mb-2">
-                                <span class="text-[10px] font-bold text-gray-500 uppercase">Blunders & Puzzles</span>
-                                <button onclick="scanGame(${g.id})" class="bg-blue-600 hover:bg-blue-500 text-white px-2 py-0.5 rounded text-[10px]">Scan for Blunders</button>
-                            </div>
-                            <div id="puzzles-${g.id}" class="space-y-1">
-                                <div class="text-[10px] text-gray-500 italic">Click scan to find blunders...</div>
-                            </div>
-                        </div>
-                    </div>`);
-                    $list.append($item);
+                    const fid = g.folder_id || '__unfiled__';
+                    if (!gamesByFolder[fid]) gamesByFolder[fid] = [];
+                    gamesByFolder[fid].push(g);
                 });
+
+                // Render each folder
+                folders.forEach(f => {
+                    const folderGames = gamesByFolder[f.id] || [];
+                    $list.append(renderFolderSection(f, folderGames, p));
+                });
+
+                // Render unfiled games
+                const unfiledGames = gamesByFolder['__unfiled__'] || [];
+                $list.append(`<div class="space-y-1 folder-drop-zone" data-folder-id=""
+                     ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+                    <div class="folder-header"></div>
+                    ${unfiledGames.map(g => renderGameItem(g, p)).join('')}
+                    ${unfiledGames.length === 0 ? '<div class="border border-dashed border-gray-700 rounded p-3 text-center text-[10px] text-gray-600 mt-2">Drop here to remove from folder</div>' : ''}
+                </div>`);
+            });
+        }
+
+        function renderFolderSection(folder, games, player) {
+            const gamesHtml = games.map(g => renderGameItem(g, player)).join('');
+            return `
+                <div class="mb-3 folder-drop-zone" data-folder-id="${folder.id}"
+                     ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+                    <div class="flex justify-between items-center bg-gray-700/50 px-3 py-2 rounded-t cursor-pointer folder-header"
+                         onclick="toggleFolderIcon(${folder.id})">
+                        <div class="flex items-center gap-2">
+                            <span id="folder-icon-${folder.id}" class="text-[13px]">📂</span>
+                            <span class="text-[11px] font-bold text-blue-300 cursor-pointer hover:underline" onclick="event.stopPropagation(); renameFolder(${folder.id}, '${folder.name.replace(/'/g, "\\'")}')">${folder.name}</span>
+                            <span class="text-[9px] text-gray-500">${folder.game_count} games • ${folder.puzzle_count} puzzles</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="event.stopPropagation(); scanFolder(${folder.id})" id="scan-folder-btn-${folder.id}" class="text-blue-400 hover:text-blue-300 text-[10px]" title="Scan all games for blunders">🔍 Scan All</button>
+                            <button onclick="event.stopPropagation(); deleteFolder(${folder.id})" class="text-red-500 hover:text-red-400 text-[10px]">✕</button>
+                        </div>
+                    </div>
+                    <div id="folder-${folder.id}" class="border-l-2 border-blue-800/40 ml-3 pl-2 space-y-1 mt-1">
+                        ${gamesHtml || '<div class="text-[10px] text-gray-500 italic px-3 py-2">No games in this folder</div>'}
+                    </div>
+                </div>`;
+        }
+
+        function toggleFolderIcon(id) {
+            const $contents = $(`#folder-${id}`);
+            const $icon = $(`#folder-icon-${id}`);
+            $contents.toggleClass('hidden');
+            $icon.text($contents.hasClass('hidden') ? '📁' : '📂');
+        }
+
+        async function scanFolder(folderId) {
+            // Get all game IDs in this folder
+            const gameIds = [];
+            $(`#folder-${folderId} .game-draggable`).each(function () {
+                gameIds.push($(this).data('game-id'));
+            });
+            if (!gameIds.length) return;
+
+            const $btn = $(`#scan-folder-btn-${folderId}`);
+            $btn.prop('disabled', true).text('⏳ 0/' + gameIds.length);
+
+            for (let i = 0; i < gameIds.length; i++) {
+                $btn.text(`⏳ ${i + 1}/${gameIds.length}`);
+                await new Promise((resolve, reject) => {
+                    fetch(`/games/${gameIds[i]}/scan-chunked`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ chunk_size: 10, delay_ms: 500, threshold: 100 })
+                    }).then(response => {
+                        const reader = response.body.getReader();
+                        function read() {
+                            reader.read().then(({ done }) => {
+                                if (done) { resolve(); return; }
+                                read();
+                            }).catch(reject);
+                        }
+                        read();
+                    }).catch(reject);
+                });
+            }
+
+            $btn.text('✓ Done').removeClass('text-blue-400').addClass('text-green-400');
+            setTimeout(() => {
+                $btn.text('🔍 Scan All').removeClass('text-green-400').addClass('text-blue-400').prop('disabled', false);
+            }, 2000);
+            loadData();
+        }
+
+        function renderGameItem(g, player) {
+            const w = g.white || "?", b = g.black || "?";
+            const p = player || '';
+            const isW = p && w.toLowerCase().includes(p.toLowerCase()), isB = p && b.toLowerCase().includes(p.toLowerCase());
+            const nameHtml = g.name ? `<div class="text-[10px] text-purple-300 font-medium">${g.name}</div>` : '';
+
+            return `<div class="bg-gray-750 rounded border border-gray-700 text-sm overflow-hidden game-draggable"
+                         draggable="true" data-game-id="${g.id}"
+                         ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)">
+                <div class="p-3 flex justify-between items-center cursor-pointer hover:bg-gray-700 transition" onclick="toggleGameExpand(${g.id})">
+                    <div class="flex items-center gap-2">
+                        <span class="drag-grip text-gray-600 cursor-grab text-[12px] select-none" title="Drag to move">⠿</span>
+                        <span id="chevron-${g.id}" class="text-gray-500 text-[10px] transform transition-transform">▶</span>
+                        <div>
+                            ${nameHtml}
+                            <div class="font-bold text-xs"><span class="${isW ? 'highlight-player' : ''}">${w}</span> vs <span class="${isB ? 'highlight-player' : ''}">${b}</span></div>
+                            <div class="text-gray-400 text-[10px]">${g.date} • ${g.result}</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="event.stopPropagation(); loadGameMoves(${g.id})" class="text-blue-400 hover:text-blue-300 text-[10px] border border-blue-900/30 px-2 py-1 rounded bg-blue-900/10">LOAD</button>
+                        <button onclick="event.stopPropagation(); requestDelete(${g.id}, this)" class="text-red-500 hover:text-red-400 text-[10px] min-w-[40px] text-right">Delete</button>
+                    </div>
+                </div>
+                <div id="game-details-${g.id}" class="hidden border-t border-gray-700 bg-gray-900/50 p-2">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-[10px] font-bold text-gray-500 uppercase">Blunders & Puzzles</span>
+                        <div class="flex items-center gap-2">
+                            <label class="text-[9px] text-gray-400 flex items-center gap-1">Threshold
+                                <input type="number" id="threshold-${g.id}" value="100" min="30" max="500" step="10"
+                                    class="bg-gray-700 border border-gray-600 rounded px-1 py-0.5 text-[10px] text-white w-14 text-center focus:outline-none focus:border-blue-500">
+                                <span class="text-gray-500">cp</span>
+                            </label>
+                            <button onclick="scanGame(${g.id})" class="bg-blue-600 hover:bg-blue-500 text-white px-2 py-0.5 rounded text-[10px]">Scan</button>
+                        </div>
+                    </div>
+                    <div id="puzzles-${g.id}" class="space-y-1">
+                        <div class="text-[10px] text-gray-500 italic">Click scan to find blunders...</div>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        // --- Drag and Drop ---
+        function handleDragStart(e) {
+            e.dataTransfer.setData('text/plain', e.currentTarget.dataset.gameId);
+            e.dataTransfer.effectAllowed = 'move';
+            e.currentTarget.classList.add('dragging');
+        }
+
+        function handleDragEnd(e) {
+            e.currentTarget.classList.remove('dragging');
+            document.querySelectorAll('.folder-drop-zone').forEach(el => el.classList.remove('drag-over'));
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            const zone = e.currentTarget.closest('.folder-drop-zone');
+            if (zone) zone.classList.add('drag-over');
+        }
+
+        function handleDragLeave(e) {
+            const zone = e.currentTarget.closest('.folder-drop-zone');
+            // Only remove if we're actually leaving the zone (not entering a child)
+            if (zone && !zone.contains(e.relatedTarget)) {
+                zone.classList.remove('drag-over');
+            }
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            const zone = e.currentTarget.closest('.folder-drop-zone');
+            if (zone) zone.classList.remove('drag-over');
+            const gameId = parseInt(e.dataTransfer.getData('text/plain'));
+            const folderId = zone ? zone.dataset.folderId : '';
+            moveGameToFolder(gameId, folderId);
+        }
+
+        function createFolder() {
+            const name = prompt('Folder name:');
+            if (!name || !name.trim()) return;
+            $.ajax({
+                url: '/folders',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ name: name.trim() }),
+                success: loadData
+            });
+        }
+
+        function renameFolder(id, currentName) {
+            const name = prompt('Rename folder:', currentName);
+            if (!name || !name.trim()) return;
+            $.ajax({
+                url: '/folders/' + id,
+                type: 'PUT',
+                contentType: 'application/json',
+                data: JSON.stringify({ name: name.trim() }),
+                success: loadData
+            });
+        }
+
+        function deleteFolder(id) {
+            const $modal = $('#delete-folder-modal');
+            $modal.removeClass('hidden').find('#delete-folder-name').text(
+                $(`#folder-icon-${id}`).parent().find('.text-blue-300').text()
+            );
+            // Bind buttons
+            $('#dfm-cancel').off('click').on('click', () => $modal.addClass('hidden'));
+            $('#dfm-keep').off('click').on('click', () => {
+                $modal.addClass('hidden');
+                $.ajax({ url: '/folders/' + id, type: 'DELETE', success: loadData });
+            });
+            $('#dfm-delete-all').off('click').on('click', () => {
+                $modal.addClass('hidden');
+                $.ajax({ url: '/folders/' + id + '?delete_games=true', type: 'DELETE', success: loadData });
+            });
+        }
+
+        function moveGameToFolder(gameId, folderId) {
+            $.ajax({
+                url: '/games/' + gameId + '/move',
+                type: 'PUT',
+                contentType: 'application/json',
+                data: JSON.stringify({ folder_id: folderId ? parseInt(folderId) : null }),
+                success: loadData
+            });
+        }
+
+        // --- Lichess Import ---
+        function loadLichessSettings() {
+            const saved = localStorage.getItem('lichess_settings');
+            if (saved) {
+                try {
+                    const s = JSON.parse(saved);
+                    if (s.username) $('#lichess-username').val(s.username);
+                    if (s.token) $('#lichess-token').val(s.token);
+                } catch (e) { }
+            }
+        }
+
+        function saveLichessSettings() {
+            const settings = {
+                username: $('#lichess-username').val().trim(),
+                token: $('#lichess-token').val().trim()
+            };
+            localStorage.setItem('lichess_settings', JSON.stringify(settings));
+            showLichessStatus('Settings saved ✓', 'text-green-400');
+        }
+
+        function getLichessHeaders() {
+            const token = $('#lichess-token').val().trim();
+            const headers = {};
+            if (token) headers['X-Lichess-Token'] = token;
+            return headers;
+        }
+
+        function showLichessStatus(msg, colorClass) {
+            const $s = $('#lichess-status');
+            $s.text(msg).removeClass('hidden text-gray-500 text-green-400 text-red-400 text-blue-400').addClass(colorClass || 'text-gray-500');
+            if (colorClass === 'text-green-400') {
+                setTimeout(() => $s.addClass('hidden'), 2000);
+            }
+        }
+
+        function browseLichessStudies() {
+            const username = $('#lichess-username').val().trim();
+            if (!username) {
+                showLichessStatus('Enter a Lichess username', 'text-red-400');
+                return;
+            }
+
+            showLichessStatus('Loading studies...', 'text-blue-400');
+            const $list = $('#lichess-studies').empty().removeClass('hidden');
+
+            $.ajax({
+                url: '/lichess/studies?username=' + encodeURIComponent(username),
+                headers: getLichessHeaders(),
+                success: function (studies) {
+                    if (!studies.length) {
+                        showLichessStatus('No studies found', 'text-gray-500');
+                        return;
+                    }
+                    showLichessStatus(`Found ${studies.length} study(ies)`, 'text-green-400');
+                    studies.forEach(s => {
+                        const dateStr = s.updatedAt ? new Date(s.updatedAt).toLocaleDateString() : '';
+                        $list.append(`
+                            <div class="flex justify-between items-center bg-gray-700/30 rounded px-3 py-2 border border-gray-700">
+                                <div>
+                                    <div class="text-[11px] font-medium text-gray-200">${s.name}</div>
+                                    <div class="text-[9px] text-gray-500">${s.chapters} chapter(s) ${dateStr ? '• ' + dateStr : ''}</div>
+                                </div>
+                                <button onclick="importLichessStudy('${s.id}', '${s.name.replace(/'/g, "\\'")}', ${s.createdAt || 0})"
+                                    id="import-btn-${s.id}"
+                                    class="bg-purple-600 hover:bg-purple-500 text-white px-2 py-0.5 rounded text-[10px]">Import</button>
+                            </div>
+                        `);
+                    });
+                },
+                error: function (xhr) {
+                    const err = xhr.responseJSON?.error || 'Failed to load studies';
+                    showLichessStatus(err, 'text-red-400');
+                }
+            });
+        }
+
+        function importLichessStudy(studyId, studyName, createdAt) {
+            const $btn = $(`#import-btn-${studyId}`);
+            $btn.text('Importing...').prop('disabled', true).removeClass('bg-purple-600 hover:bg-purple-500').addClass('bg-gray-600');
+            const studyDate = createdAt ? new Date(createdAt).toISOString().split('T')[0] : '';
+
+            $.ajax({
+                url: '/lichess/import',
+                type: 'POST',
+                contentType: 'application/json',
+                headers: getLichessHeaders(),
+                data: JSON.stringify({ study_id: studyId, study_name: studyName, study_date: studyDate }),
+                success: function (res) {
+                    $btn.text(`✓ ${res.imported} games`).removeClass('bg-gray-600').addClass('bg-green-700');
+                    loadData();
+                },
+                error: function (xhr) {
+                    const err = xhr.responseJSON?.error || 'Import failed';
+                    $btn.text('Error').removeClass('bg-gray-600').addClass('bg-red-700');
+                    showLichessStatus(err, 'text-red-400');
+                }
             });
         }
 
@@ -570,16 +1086,69 @@
 
         function scanGame(id) {
             const $container = $(`#puzzles-${id}`);
-            $container.html('<div class="text-[10px] text-blue-400 italic animate-pulse">Scanning... (this may take a moment)</div>');
-            $.ajax({
-                url: `/games/${id}/scan`,
-                type: 'POST',
-                success: function (res) {
-                    loadPuzzles(id); // Reload to get the fresh data from DB
-                },
-                error: function () {
-                    $container.html('<div class="text-[10px] text-red-400 italic">Scan failed.</div>');
+            $container.html(`
+                <div class="mb-2">
+                    <div class="flex justify-between text-[10px] text-blue-400 mb-1">
+                        <span id="scan-status-${id}">Scanning...</span>
+                        <span id="scan-pct-${id}">0%</span>
+                    </div>
+                    <div class="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+                        <div id="scan-bar-${id}" class="bg-blue-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+            `);
+
+            // Use fetch + ReadableStream to consume SSE from POST endpoint
+            const threshold = parseInt($(`#threshold-${id}`).val()) || 100;
+            fetch(`/games/${id}/scan-chunked`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chunk_size: 10, delay_ms: 500, threshold: threshold })
+            }).then(response => {
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                function read() {
+                    reader.read().then(({ done, value }) => {
+                        if (done) {
+                            loadPuzzles(id);
+                            return;
+                        }
+                        buffer += decoder.decode(value, { stream: true });
+                        // Parse SSE lines
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop(); // keep incomplete line in buffer
+                        lines.forEach(line => {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const evt = JSON.parse(line.substring(6));
+                                    const pct = Math.round((evt.progress / evt.total) * 100);
+                                    $(`#scan-bar-${id}`).css('width', pct + '%');
+                                    $(`#scan-pct-${id}`).text(pct + '%');
+                                    $(`#scan-status-${id}`).text(
+                                        evt.done
+                                            ? `Done — ${evt.total_puzzles} blunder(s) found`
+                                            : `Move ${evt.progress}/${evt.total} (${evt.puzzles_so_far} found)`
+                                    );
+                                    // Live-update eval chart if this is the selected game
+                                    if (evt.evals && id === selectedGameId) {
+                                        gameEvals = evt.evals;
+                                        drawEvalChart(gameEvals, currentMoveIndex);
+                                    }
+                                    if (evt.done) {
+                                        $(`#scan-bar-${id}`).removeClass('bg-blue-500').addClass('bg-green-500');
+                                        setTimeout(() => loadPuzzles(id), 800);
+                                    }
+                                } catch (e) { /* skip malformed line */ }
+                            }
+                        });
+                        read();
+                    });
                 }
+                read();
+            }).catch(() => {
+                $container.html('<div class="text-[10px] text-red-400 italic">Scan failed.</div>');
             });
         }
 
@@ -619,10 +1188,10 @@
                 $.ajax({
                     url: '/games/' + id,
                     type: 'DELETE',
-                    success: function() {
+                    success: function () {
                         loadData();
                     },
-                    error: function(err) {
+                    error: function (err) {
                         alert('Error deleting game: ' + (err.statusText || 'Unknown error'));
                         loadData();
                     }
@@ -635,16 +1204,38 @@
             $.ajax({ url: '/upload', type: 'POST', data: fd, processData: false, contentType: false, success: loadData });
         });
         $('#player-filter').on('input', loadData);
-        board = Chessboard('myBoard', { draggable: true, position: 'start', onDrop: onDrop, moveSpeed: 0, snapSpeed: 0, pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png' });
+        board = Chessboard('myBoard', { draggable: true, position: 'start', onDrop: onDrop, moveSpeed: 0, snapSpeed: 0, pieceTheme: '/static/img/chesspieces/svg/{piece}.svg' });
+        loadLichessSettings();
         loadData();
+        // Initial sizing after board is ready
+        setTimeout(() => { resizeBoardArea(); board.resize(); const bh = $('#myBoard').height(); if (bh > 0) $('#eval-bar-v').height(bh); }, 50);
 
         $(window).resize(function () {
+            resizeBoardArea();
             board.resize();
             const bh = $('#myBoard').height();
             if (bh > 0) $('#eval-bar-v').height(bh);
             const svg = document.getElementById('arrow-svg');
             while (svg && svg.firstChild) svg.removeChild(svg.firstChild);
+            updateChartIndicator();
         });
+
+        function resizeBoardArea() {
+            const headerH = $('header').outerHeight() || 0;
+            const viewH = window.innerHeight;
+            const availH = viewH - headerH - 8;
+            const chartH = $('#eval-chart-wrap').is(':visible') ? 128 : 8;
+            const evalBarW = 38;
+            const boardAreaW = $('#board-area').width();
+            // Board is square: side = min(available height - chart, available width - eval bar - padding)
+            const maxBoardSide = Math.min(availH - chartH, boardAreaW - evalBarW - 16);
+            const boardSide = Math.max(250, maxBoardSide);
+            // Set explicit width on the board wrapper so chessboard.js respects it
+            $('#board-wrapper').css('width', boardSide + 'px');
+            $('#eval-chart-wrap').css('width', (boardSide + evalBarW) + 'px');
+        }
+
+        resizeBoardArea();
 
         $('#btn-start').click(() => jumpToMove(-1));
         $('#btn-prev').click(() => jumpToMove(currentMoveIndex - 1));
@@ -652,12 +1243,44 @@
         $('#btn-end').click(() => jumpToMove(gameMoves.length - 1));
 
         $(document).keydown(function (e) {
-            if ($("textarea, input").is(":focus")) return;
-            if (e.which === 37) { e.preventDefault(); jumpToMove(currentMoveIndex - 1); }
-            else if (e.which === 39) { e.preventDefault(); jumpToMove(currentMoveIndex + 1); }
-            else if (e.which === 70) { e.preventDefault(); board.flip(); }
+            // Only suppress hotkeys when actually typing in a text field
+            const focused = document.activeElement;
+            const tag = focused ? focused.tagName.toLowerCase() : '';
+            const inputType = focused ? (focused.type || '').toLowerCase() : '';
+            const isTyping = tag === 'textarea' || (tag === 'input' && ['text', 'search', 'url', 'email', 'password'].includes(inputType));
+            if (isTyping) return;
+
+            if (e.which === 37) { e.preventDefault(); focused && focused.blur(); jumpToMove(currentMoveIndex - 1); }
+            else if (e.which === 39) { e.preventDefault(); focused && focused.blur(); jumpToMove(currentMoveIndex + 1); }
+            else if (e.which === 38) { e.preventDefault(); focused && focused.blur(); jumpToMove(-1); }
+            else if (e.which === 40) { e.preventDefault(); focused && focused.blur(); jumpToMove(gameMoves.length - 1); }
+            else if (e.which === 70) { e.preventDefault(); focused && focused.blur(); board.flip(); fetchAnalysis(); }
         });
     </script>
+    <!-- Delete Folder Modal -->
+    <div id="delete-folder-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onclick="$('#delete-folder-modal').addClass('hidden')"></div>
+        <div class="relative bg-gray-800 border border-gray-600 rounded-lg shadow-2xl p-5 w-80 max-w-[90vw]">
+            <h3 class="text-sm font-bold text-gray-100 mb-1">Delete Folder</h3>
+            <p class="text-[11px] text-gray-400 mb-4">How would you like to delete <span id="delete-folder-name"
+                    class="text-blue-300 font-medium"></span>?</p>
+            <div class="space-y-2">
+                <button id="dfm-keep"
+                    class="w-full text-left px-3 py-2 rounded bg-gray-700 hover:bg-gray-600 border border-gray-600 transition">
+                    <div class="text-[11px] font-medium text-gray-200">📂 Keep games</div>
+                    <div class="text-[9px] text-gray-500">Games will be moved to Unfiled</div>
+                </button>
+                <button id="dfm-delete-all"
+                    class="w-full text-left px-3 py-2 rounded bg-red-900/30 hover:bg-red-900/50 border border-red-800/50 transition">
+                    <div class="text-[11px] font-medium text-red-300">🗑️ Delete everything</div>
+                    <div class="text-[9px] text-red-400/70">Permanently remove all games and puzzles</div>
+                </button>
+            </div>
+            <button id="dfm-cancel"
+                class="w-full mt-3 text-[10px] text-gray-500 hover:text-gray-300 transition">Cancel</button>
+        </div>
+    </div>
 </body>
 
 </html>
