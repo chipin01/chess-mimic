@@ -215,6 +215,29 @@
 
                 <div class="flex-1 overflow-y-auto p-4">
                     <div id="content-tree" class="tab-content">
+                        <!-- Player Controls -->
+                        <div class="mb-3 space-y-2">
+                            <div class="flex gap-2 items-center">
+                                <div class="relative flex-1">
+                                    <input type="text" id="tree-player" list="player-list" placeholder="Player name..."
+                                        class="w-full bg-gray-700/60 border border-gray-600 rounded px-2 py-1 text-[11px] text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition"
+                                        oninput="loadTree()">
+                                    <datalist id="player-list"></datalist>
+                                </div>
+                                <div
+                                    class="flex rounded overflow-hidden border border-gray-600 text-[10px] flex-shrink-0">
+                                    <button id="side-all" onclick="setSide('')"
+                                        class="px-2 py-1 bg-blue-600 text-white font-bold transition">Both</button>
+                                    <button id="side-white" onclick="setSide('white')"
+                                        class="px-2 py-1 bg-gray-700 text-gray-400 hover:bg-gray-600 transition">♔
+                                        White</button>
+                                    <button id="side-black" onclick="setSide('black')"
+                                        class="px-2 py-1 bg-gray-700 text-gray-400 hover:bg-gray-600 transition">♚
+                                        Black</button>
+                                </div>
+                            </div>
+                            <div id="tree-player-info" class="text-[9px] text-gray-500 italic hidden"></div>
+                        </div>
                         <table class="w-full text-left text-sm">
                             <thead class="text-gray-500 border-b border-gray-700">
                                 <tr>
@@ -258,6 +281,19 @@
                                 </div>
                                 <div id="lichess-status" class="text-[10px] text-gray-500 italic hidden"></div>
                                 <div id="lichess-studies" class="space-y-1 hidden"></div>
+                            </div>
+                        </div>
+                        <!-- Search Bar -->
+                        <div class="mb-3">
+                            <div class="relative">
+                                <span
+                                    class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-[11px] pointer-events-none">🔍</span>
+                                <input type="text" id="game-search" placeholder="Search games, players, folders..."
+                                    class="w-full bg-gray-700/60 border border-gray-600 rounded-lg pl-7 pr-8 py-1.5 text-[11px] text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:bg-gray-700 transition"
+                                    oninput="filterGameList()">
+                                <button id="game-search-clear"
+                                    class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 text-[11px] hidden"
+                                    onclick="clearGameSearch()">✕</button>
                             </div>
                         </div>
                         <div id="game-list" class="space-y-2"></div>
@@ -326,6 +362,18 @@
             const moveIdx = gameMoves.findIndex(m => m.fen === fen);
             if (moveIdx !== -1) currentMoveIndex = moveIdx;
 
+            updateUI();
+            fetchAnalysis();
+        }
+
+        function playMove(san) {
+            const move = game.move(san);
+            if (!move) return;
+            board.position(game.fen(), false);
+            // Sync move index if within a loaded game
+            const fen = game.fen();
+            const moveIdx = gameMoves.findIndex(m => m.fen === fen);
+            if (moveIdx !== -1) currentMoveIndex = moveIdx;
             updateUI();
             fetchAnalysis();
         }
@@ -717,46 +765,124 @@
             });
         }
 
+        // Cached data for search filtering
+        let _cachedFolders = [];
+        let _cachedGames = [];
+        let _treeSide = '';  // '', 'white', or 'black'
+
+        function loadTree() {
+            const player = ($('#tree-player').val() || '').trim();
+            const side = _treeSide;
+            let url = '/tree?player=' + encodeURIComponent(player);
+            if (side) url += '&side=' + side;
+            const $info = $('#tree-player-info');
+            if (player) {
+                const sideLabel = side === 'white' ? 'as White' : side === 'black' ? 'as Black' : '';
+                $info.text(`Showing tree for "${player}" ${sideLabel}`.trim()).removeClass('hidden');
+            } else {
+                $info.addClass('hidden');
+            }
+            $.get(url, data => { treeData = data; updateUI(); });
+        }
+
+        function setSide(side) {
+            _treeSide = side;
+            // Update button styles
+            $('#side-all, #side-white, #side-black').removeClass('bg-blue-600 text-white font-bold').addClass('bg-gray-700 text-gray-400');
+            if (side === 'white') $('#side-white').removeClass('bg-gray-700 text-gray-400').addClass('bg-blue-600 text-white font-bold');
+            else if (side === 'black') $('#side-black').removeClass('bg-gray-700 text-gray-400').addClass('bg-blue-600 text-white font-bold');
+            else $('#side-all').removeClass('bg-gray-700 text-gray-400').addClass('bg-blue-600 text-white font-bold');
+            loadTree();
+        }
+
+        function loadPlayerList() {
+            $.get('/players', function (players) {
+                const $dl = $('#player-list').empty();
+                players.forEach(p => $dl.append(`<option value="${p}">`));
+            });
+        }
+
         function loadData() {
-            const p = $('#player-filter').val();
-            $.get('/tree?player=' + p, data => { treeData = data; updateUI(); });
+            loadTree();
 
             // Fetch folders and games together
             $.when($.get('/folders'), $.get('/games')).done(function (foldersRes, gamesRes) {
                 const folderData = foldersRes[0];
-                const folders = folderData.folders;
-                const unfiled = folderData.unfiled;
-                const games = gamesRes[0];
-                const $list = $('#game-list').empty();
+                _cachedFolders = folderData.folders;
+                _cachedGames = gamesRes[0];
+                renderGameList();
+            });
 
-                // "New Folder" button
-                $list.append(`<div class="mb-3">
-                    <button onclick="createFolder()" class="bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded text-[10px] font-medium">+ New Folder</button>
-                </div>`);
+            // Refresh player autocomplete list
+            loadPlayerList();
+        }
 
-                // Group games by folder_id
-                const gamesByFolder = {};
-                games.forEach(g => {
-                    const fid = g.folder_id || '__unfiled__';
-                    if (!gamesByFolder[fid]) gamesByFolder[fid] = [];
-                    gamesByFolder[fid].push(g);
-                });
+        function renderGameList() {
+            const p = $('#player-filter').val();
+            const query = ($('#game-search').val() || '').trim().toLowerCase();
+            const $list = $('#game-list').empty();
 
-                // Render each folder
-                folders.forEach(f => {
-                    const folderGames = gamesByFolder[f.id] || [];
-                    $list.append(renderFolderSection(f, folderGames, p));
-                });
+            // "New Folder" button
+            $list.append(`<div class="mb-3">
+                <button onclick="createFolder()" class="bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded text-[10px] font-medium">+ New Folder</button>
+            </div>`);
 
-                // Render unfiled games
-                const unfiledGames = gamesByFolder['__unfiled__'] || [];
+            // Group games by folder_id
+            const gamesByFolder = {};
+            _cachedGames.forEach(g => {
+                const fid = g.folder_id || '__unfiled__';
+                if (!gamesByFolder[fid]) gamesByFolder[fid] = [];
+                gamesByFolder[fid].push(g);
+            });
+
+            // Helper: check if a game matches the search query
+            function gameMatches(g) {
+                if (!query) return true;
+                const w = (g.white || '').toLowerCase();
+                const b = (g.black || '').toLowerCase();
+                const n = (g.name || '').toLowerCase();
+                return w.includes(query) || b.includes(query) || n.includes(query);
+            }
+
+            // Render each folder
+            _cachedFolders.forEach(f => {
+                const folderGames = gamesByFolder[f.id] || [];
+                const folderNameMatch = query && f.name.toLowerCase().includes(query);
+                // If folder name matches, show all its games; otherwise filter games
+                const filteredGames = folderNameMatch ? folderGames : folderGames.filter(gameMatches);
+                // Skip empty folders when searching, unless the folder itself matches
+                if (query && !folderNameMatch && filteredGames.length === 0) return;
+                const $section = $(renderFolderSection(f, filteredGames, p));
+                // Auto-expand folders that have search matches
+                if (query && (folderNameMatch || filteredGames.length > 0)) {
+                    $section.find(`#folder-${f.id}`).removeClass('hidden');
+                    $section.find(`#folder-icon-${f.id}`).text('📂');
+                }
+                $list.append($section);
+            });
+
+            // Render unfiled games
+            const unfiledGames = (gamesByFolder['__unfiled__'] || []).filter(gameMatches);
+            if (!query || unfiledGames.length > 0) {
                 $list.append(`<div class="space-y-1 folder-drop-zone" data-folder-id=""
                      ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
                     <div class="folder-header"></div>
                     ${unfiledGames.map(g => renderGameItem(g, p)).join('')}
-                    ${unfiledGames.length === 0 ? '<div class="border border-dashed border-gray-700 rounded p-3 text-center text-[10px] text-gray-600 mt-2">Drop here to remove from folder</div>' : ''}
+                    ${!query && unfiledGames.length === 0 ? '<div class="border border-dashed border-gray-700 rounded p-3 text-center text-[10px] text-gray-600 mt-2">Drop here to remove from folder</div>' : ''}
                 </div>`);
-            });
+            }
+        }
+
+        function filterGameList() {
+            const q = $('#game-search').val();
+            $('#game-search-clear').toggleClass('hidden', !q);
+            renderGameList();
+        }
+
+        function clearGameSearch() {
+            $('#game-search').val('').focus();
+            $('#game-search-clear').addClass('hidden');
+            renderGameList();
         }
 
         function renderFolderSection(folder, games, player) {
@@ -767,7 +893,7 @@
                     <div class="flex justify-between items-center bg-gray-700/50 px-3 py-2 rounded-t cursor-pointer folder-header"
                          onclick="toggleFolderIcon(${folder.id})">
                         <div class="flex items-center gap-2">
-                            <span id="folder-icon-${folder.id}" class="text-[13px]">📂</span>
+                            <span id="folder-icon-${folder.id}" class="text-[13px]">📁</span>
                             <span class="text-[11px] font-bold text-blue-300 cursor-pointer hover:underline" onclick="event.stopPropagation(); renameFolder(${folder.id}, '${folder.name.replace(/'/g, "\\'")}')">${folder.name}</span>
                             <span class="text-[9px] text-gray-500">${folder.game_count} games • ${folder.puzzle_count} puzzles</span>
                         </div>
@@ -776,7 +902,7 @@
                             <button onclick="event.stopPropagation(); deleteFolder(${folder.id})" class="text-red-500 hover:text-red-400 text-[10px]">✕</button>
                         </div>
                     </div>
-                    <div id="folder-${folder.id}" class="border-l-2 border-blue-800/40 ml-3 pl-2 space-y-1 mt-1">
+                    <div id="folder-${folder.id}" class="border-l-2 border-blue-800/40 ml-3 pl-2 space-y-1 mt-1 hidden">
                         ${gamesHtml || '<div class="text-[10px] text-gray-500 italic px-3 py-2">No games in this folder</div>'}
                     </div>
                 </div>`;

@@ -72,9 +72,21 @@ def upload_pgn():
 
     return jsonify({"success": True, "count": games_added})
 
+@app.route('/players')
+def get_players():
+    games = database.get_all_games()
+    players = set()
+    for g in games:
+        w = g.get('white', '')
+        b = g.get('black', '')
+        if w and w not in ('?', 'Unknown'): players.add(w)
+        if b and b not in ('?', 'Unknown'): players.add(b)
+    return jsonify(sorted(players, key=str.lower))
+
 @app.route('/tree')
 def get_tree():
     player_name = request.args.get('player', '')
+    side = request.args.get('side', '')  # 'white', 'black', or '' for both
     games = database.get_all_games()
     move_db = {} 
     for g in games:
@@ -84,9 +96,13 @@ def get_tree():
         white = game.headers.get("White", "")
         black = game.headers.get("Black", "")
         res = game.headers.get("Result", "*")
-        is_white = player_name.lower() in white.lower()
-        is_black = player_name.lower() in black.lower()
-        if player_name and not (is_white or is_black): continue
+        is_white = player_name.lower() in white.lower() if player_name else False
+        is_black = player_name.lower() in black.lower() if player_name else False
+        # Filter by side preference
+        if player_name:
+            if side == 'white' and not is_white: continue
+            elif side == 'black' and not is_black: continue
+            elif not side and not (is_white or is_black): continue
         stat = "draw"
         if res == "1-0": stat = "win" if is_white else "loss"
         elif res == "0-1": stat = "win" if is_black else "loss"
@@ -94,11 +110,11 @@ def get_tree():
         for move in game.mainline_moves():
             if not player_name or (board.turn == chess.WHITE and is_white) or (board.turn == chess.BLACK and is_black):
                 fen = ingest.get_fen_key(board)
-                move_uci = move.uci()
+                move_san = board.san(move)
                 if fen not in move_db: move_db[fen] = {}
-                if move_uci not in move_db[fen]:
-                    move_db[fen][move_uci] = {"count": 0, "win": 0, "loss": 0, "draw": 0}
-                m = move_db[fen][move_uci]
+                if move_san not in move_db[fen]:
+                    move_db[fen][move_san] = {"count": 0, "win": 0, "loss": 0, "draw": 0}
+                m = move_db[fen][move_san]
                 m["count"] += 1
                 m[stat] += 1
             board.push(move)

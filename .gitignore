@@ -11,3 +11,4 @@ my_games.pgn
 # Environment
 .env
 venv/
+chess_mimic.db
