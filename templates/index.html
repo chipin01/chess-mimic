@@ -155,6 +155,211 @@
         input:checked+.slider:before {
             transform: translateX(14px);
         }
+
+        /* Tree game selection checkbox */
+        .tree-checkbox {
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border: 2px solid #4b5563;
+            border-radius: 3px;
+            background: transparent;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: all 0.15s ease;
+            position: relative;
+        }
+
+        .tree-checkbox:checked {
+            background: #3b82f6;
+            border-color: #3b82f6;
+        }
+
+        .tree-checkbox:checked::after {
+            content: '✓';
+            position: absolute;
+            top: -2px;
+            left: 1px;
+            font-size: 10px;
+            color: white;
+            font-weight: bold;
+        }
+
+        .tree-checkbox:hover {
+            border-color: #60a5fa;
+        }
+
+        .game-in-tree {
+            border-left: 3px solid #22c55e !important;
+        }
+
+        .in-tree-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            font-size: 9px;
+            color: #22c55e;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 4px;
+            padding: 1px 5px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .in-tree-badge .remove-tree {
+            cursor: pointer;
+            color: #6b7280;
+            margin-left: 2px;
+        }
+
+        .in-tree-badge .remove-tree:hover {
+            color: #ef4444;
+        }
+
+        /* Tree visualization */
+        .tree-node {
+            position: relative;
+            margin-left: 16px;
+            padding: 2px 0;
+        }
+
+        .tree-node::before {
+            content: '';
+            position: absolute;
+            left: -12px;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background: #374151;
+        }
+
+        .tree-node::after {
+            content: '';
+            position: absolute;
+            left: -12px;
+            top: 12px;
+            width: 10px;
+            height: 1px;
+            background: #374151;
+        }
+
+        .tree-node:last-child::before {
+            bottom: calc(100% - 12px);
+        }
+
+        .tree-root>.tree-node {
+            margin-left: 0;
+        }
+
+        .tree-root>.tree-node::before,
+        .tree-root>.tree-node::after {
+            display: none;
+        }
+
+        .tree-node-header {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: background 0.1s;
+            background: rgba(40, 52, 68, 0.6);
+        }
+
+        .tree-node-header:hover {
+            background: rgba(55, 70, 90, 0.7);
+        }
+
+        .tree-node-header.active-path {
+            background: rgba(59, 130, 246, 0.15);
+            border-left: 2px solid #3b82f6;
+        }
+
+        .tree-node-header .move-san {
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        .tree-node-header .move-san.white-move {
+            color: #faf0e1;
+        }
+
+        .tree-node-header .move-san.black-move {
+            color: #8b6840;
+        }
+
+        .tree-node-header .move-count {
+            color: #6b7280;
+            font-size: 9px;
+            margin-left: 4px;
+        }
+
+        .tree-node-header .win-bar {
+            display: inline-flex;
+            width: 40px;
+            height: 6px;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-left: 6px;
+            flex-shrink: 0;
+        }
+
+        .tree-node-header .win-bar .wb {
+            background: #22c55e;
+        }
+
+        .tree-node-header .win-bar .db {
+            background: #6b7280;
+        }
+
+        .tree-node-header .win-bar .lb {
+            background: #ef4444;
+        }
+
+
+
+        .tree-node-header .chevron {
+            font-size: 8px;
+            color: #6b7280;
+            width: 10px;
+            text-align: center;
+            flex-shrink: 0;
+            transition: transform 0.15s;
+        }
+
+        .tree-node-children {
+            overflow: hidden;
+        }
+
+        .tree-node-children.collapsed {
+            display: none;
+        }
+
+        .tree-player-select {
+            background: #1f2937;
+            color: #e5e7eb;
+            border: 1px solid #4b5563;
+            border-radius: 4px;
+            padding: 3px 6px;
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            flex: 1;
+            min-width: 0;
+            transition: border-color 0.15s;
+        }
+
+        .tree-player-select:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+
+        .tree-player-select:hover {
+            border-color: #60a5fa;
+        }
     </style>
 </head>
 
@@ -202,10 +407,10 @@
             <div
                 class="w-full md:w-1/3 bg-gray-800 border-t md:border-t-0 md:border-l border-gray-700 flex flex-col min-h-[400px] md:min-h-0">
                 <div class="flex border-b border-gray-700 text-center">
-                    <button onclick="showTab('tree')" id="tab-tree"
-                        class="flex-1 py-3 text-xs font-medium active-tab uppercase">Tree</button>
                     <button onclick="showTab('games')" id="tab-games"
-                        class="flex-1 py-3 text-xs font-medium text-gray-400 uppercase">Games</button>
+                        class="flex-1 py-3 text-xs font-medium active-tab uppercase">Games</button>
+                    <button onclick="showTab('tree')" id="tab-tree"
+                        class="flex-1 py-3 text-xs font-medium text-gray-400 uppercase">Tree</button>
                     <button onclick="showTab('moves')" id="tab-moves"
                         class="flex-1 py-3 text-xs font-medium text-gray-400 uppercase">Moves</button>
 
@@ -213,116 +418,121 @@
                         class="flex-1 py-3 text-xs font-medium text-gray-400 uppercase">Engine</button>
                 </div>
 
-                <div class="flex-1 overflow-y-auto p-4">
-                    <div id="content-tree" class="tab-content">
-                        <!-- Player Controls -->
-                        <div class="mb-3 space-y-2">
-                            <div class="flex gap-2 items-center">
-                                <div class="relative flex-1">
-                                    <input type="text" id="tree-player" list="player-list" placeholder="Player name..."
-                                        class="w-full bg-gray-700/60 border border-gray-600 rounded px-2 py-1 text-[11px] text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition"
-                                        oninput="loadTree()">
-                                    <datalist id="player-list"></datalist>
-                                </div>
-                                <div
-                                    class="flex rounded overflow-hidden border border-gray-600 text-[10px] flex-shrink-0">
-                                    <button id="side-all" onclick="setSide('')"
-                                        class="px-2 py-1 bg-blue-600 text-white font-bold transition">Both</button>
-                                    <button id="side-white" onclick="setSide('white')"
-                                        class="px-2 py-1 bg-gray-700 text-gray-400 hover:bg-gray-600 transition">♔
-                                        White</button>
-                                    <button id="side-black" onclick="setSide('black')"
-                                        class="px-2 py-1 bg-gray-700 text-gray-400 hover:bg-gray-600 transition">♚
-                                        Black</button>
-                                </div>
+                <div id="content-tree" class="tab-content hidden flex-1 overflow-y-auto p-4">
+                    <!-- Info + Player filter dropdowns -->
+                    <div class="mb-3 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span id="tree-info-text" class="text-[10px] text-gray-500 italic">Select games in the Games
+                                tab to build tree</span>
+                            <span id="tree-count" class="text-[10px] font-mono text-blue-400"></span>
+                        </div>
+                        <div class="flex gap-2 items-center">
+                            <div class="flex items-center gap-1 flex-1 min-w-0">
+                                <span class="text-[12px] font-bold flex-shrink-0" style="color:#faf0e1">♔</span>
+                                <span class="text-[9px] font-semibold flex-shrink-0" style="color:#faf0e1">White</span>
+                                <select id="tree-white-player" class="tree-player-select"
+                                    onchange="onTreePlayerChange()">
+                                    <option value="">Any player</option>
+                                </select>
                             </div>
-                            <div id="tree-player-info" class="text-[9px] text-gray-500 italic hidden"></div>
-                        </div>
-                        <table class="w-full text-left text-sm">
-                            <thead class="text-gray-500 border-b border-gray-700">
-                                <tr>
-                                    <th class="pb-2">Move</th>
-                                    <th class="pb-2">Count</th>
-                                    <th class="pb-2">Win %</th>
-                                    <th class="pb-2 text-right">Result</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tree-body"></tbody>
-                        </table>
-                    </div>
-                    <div id="content-games" class="tab-content hidden">
-                        <!-- Lichess Import Panel -->
-                        <div class="mb-4">
-                            <div class="flex items-center gap-2 cursor-pointer mb-2"
-                                onclick="$('#lichess-panel').toggleClass('hidden')">
-                                <span class="text-[13px]">♞</span>
-                                <span class="text-[11px] font-bold text-purple-300">Import from Lichess</span>
-                                <span class="text-[9px] text-gray-500">▼</span>
-                            </div>
-                            <div id="lichess-panel"
-                                class="hidden bg-gray-800/50 border border-gray-700 rounded p-3 space-y-2">
-                                <div class="flex gap-2">
-                                    <input type="text" id="lichess-username" placeholder="Lichess username"
-                                        class="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-[11px] text-white focus:outline-none focus:border-purple-500">
-                                    <input type="password" id="lichess-token"
-                                        placeholder="API token (optional, for private studies)"
-                                        class="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-[11px] text-white focus:outline-none focus:border-purple-500">
-                                </div>
-                                <div class="flex items-center justify-between">
-                                    <div class="flex items-center gap-2">
-                                        <button onclick="browseLichessStudies()"
-                                            class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded text-[10px] font-medium">Browse
-                                            Studies</button>
-                                        <button onclick="saveLichessSettings()"
-                                            class="text-[9px] text-gray-400 hover:text-gray-300">Save Settings</button>
-                                    </div>
-                                    <a href="https://lichess.org/account/oauth/token" target="_blank"
-                                        class="text-[9px] text-purple-400 hover:underline">Get API token →</a>
-                                </div>
-                                <div id="lichess-status" class="text-[10px] text-gray-500 italic hidden"></div>
-                                <div id="lichess-studies" class="space-y-1 hidden"></div>
-                            </div>
-                        </div>
-                        <!-- Search Bar -->
-                        <div class="mb-3">
-                            <div class="relative">
-                                <span
-                                    class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-[11px] pointer-events-none">🔍</span>
-                                <input type="text" id="game-search" placeholder="Search games, players, folders..."
-                                    class="w-full bg-gray-700/60 border border-gray-600 rounded-lg pl-7 pr-8 py-1.5 text-[11px] text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:bg-gray-700 transition"
-                                    oninput="filterGameList()">
-                                <button id="game-search-clear"
-                                    class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 text-[11px] hidden"
-                                    onclick="clearGameSearch()">✕</button>
-                            </div>
-                        </div>
-                        <div id="game-list" class="space-y-2"></div>
-                    </div>
-                    <div id="content-moves" class="tab-content hidden flex flex-col h-full">
-                        <div id="active-game-header" class="mb-4 pb-2 border-b border-gray-700 hidden">
-                            <div class="font-bold text-blue-400 text-sm" id="ag-players"></div>
-                            <div class="text-[10px] text-gray-400" id="ag-meta"></div>
-                        </div>
-                        <div id="move-list" class="flex flex-wrap gap-1 mb-4">
-                            <div class="text-gray-500 text-xs italic text-center w-full">Select a game...</div>
-                        </div>
-                        <div id="annotation-box" class="mt-auto border-t border-gray-700 pt-4 hidden">
-                            <label class="block text-[10px] font-bold text-gray-500 uppercase mb-2">Move
-                                Annotation</label>
-                            <textarea id="comment-input"
-                                class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-gray-300 focus:outline-none focus:border-blue-500"
-                                rows="3" placeholder="Add notes..."></textarea>
-                            <div class="flex justify-end mt-2">
-                                <button onclick="saveAnnotation()"
-                                    class="bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded text-xs font-medium">Save
-                                    Note</button>
+                            <span class="text-[9px] text-gray-600">vs</span>
+                            <div class="flex items-center gap-1 flex-1 min-w-0">
+                                <span class="text-[12px] font-bold flex-shrink-0" style="color:#8b6840">♚</span>
+                                <span class="text-[9px] font-semibold flex-shrink-0" style="color:#8b6840">Black</span>
+                                <select id="tree-black-player" class="tree-player-select"
+                                    onchange="onTreePlayerChange()">
+                                    <option value="">Any player</option>
+                                </select>
                             </div>
                         </div>
                     </div>
+                    <div id="tree-view" class="tree-root overflow-y-auto" style="max-height: calc(100vh - 280px)">
+                    </div>
+                </div>
+                <div id="content-games" class="tab-content">
+                    <!-- Lichess Import Panel -->
+                    <div class="mb-4">
+                        <div class="flex items-center gap-2 cursor-pointer mb-2"
+                            onclick="$('#lichess-panel').toggleClass('hidden')">
+                            <span class="text-[13px]">♞</span>
+                            <span class="text-[11px] font-bold text-purple-300">Import from Lichess</span>
+                            <span class="text-[9px] text-gray-500">▼</span>
+                        </div>
+                        <div id="lichess-panel"
+                            class="hidden bg-gray-800/50 border border-gray-700 rounded p-3 space-y-2">
+                            <div class="flex gap-2">
+                                <input type="text" id="lichess-username" placeholder="Lichess username"
+                                    class="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-[11px] text-white focus:outline-none focus:border-purple-500">
+                                <input type="password" id="lichess-token"
+                                    placeholder="API token (optional, for private studies)"
+                                    class="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-[11px] text-white focus:outline-none focus:border-purple-500">
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <button onclick="browseLichessStudies()"
+                                        class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded text-[10px] font-medium">Browse
+                                        Studies</button>
+                                    <button onclick="saveLichessSettings()"
+                                        class="text-[9px] text-gray-400 hover:text-gray-300">Save Settings</button>
+                                </div>
+                                <a href="https://lichess.org/account/oauth/token" target="_blank"
+                                    class="text-[9px] text-purple-400 hover:underline">Get API token →</a>
+                            </div>
+                            <div id="lichess-status" class="text-[10px] text-gray-500 italic hidden"></div>
+                            <div id="lichess-studies" class="space-y-1 hidden"></div>
+                        </div>
+                    </div>
+                    <!-- Search Bar -->
+                    <div class="mb-3 space-y-2">
+                        <div class="relative">
+                            <span
+                                class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-[11px] pointer-events-none">🔍</span>
+                            <input type="text" id="game-search" placeholder="Search games, players, folders..."
+                                class="w-full bg-gray-700/60 border border-gray-600 rounded-lg pl-7 pr-8 py-1.5 text-[11px] text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:bg-gray-700 transition"
+                                oninput="filterGameList()">
+                            <button id="game-search-clear"
+                                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 text-[11px] hidden"
+                                onclick="clearGameSearch()">✕</button>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <button id="add-to-tree-btn" onclick="addToTree()" disabled
+                                    class="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded text-[10px] font-medium disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-green-600">🌳
+                                    Add to Tree</button>
+                                <button onclick="selectAllVisibleGames()"
+                                    class="text-[10px] text-blue-400 hover:text-blue-300">☑ Select All</button>
+                                <button onclick="clearTree()"
+                                    class="text-[10px] text-gray-500 hover:text-gray-400">Clear Tree</button>
+                            </div>
+                            <span id="selected-count" class="text-[10px] text-gray-500"></span>
+                        </div>
+                    </div>
+                    <div id="game-list" class="space-y-2"></div>
+                </div>
+                <div id="content-moves" class="tab-content hidden flex flex-col h-full">
+                    <div id="active-game-header" class="mb-4 pb-2 border-b border-gray-700 hidden">
+                        <div class="font-bold text-blue-400 text-sm" id="ag-players"></div>
+                        <div class="text-[10px] text-gray-400" id="ag-meta"></div>
+                    </div>
+                    <div id="move-list" class="flex flex-wrap gap-1 mb-4">
+                        <div class="text-gray-500 text-xs italic text-center w-full">Select a game...</div>
+                    </div>
+                    <div id="annotation-box" class="mt-auto border-t border-gray-700 pt-4 hidden">
+                        <label class="block text-[10px] font-bold text-gray-500 uppercase mb-2">Move
+                            Annotation</label>
+                        <textarea id="comment-input"
+                            class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-gray-300 focus:outline-none focus:border-blue-500"
+                            rows="3" placeholder="Add notes..."></textarea>
+                        <div class="flex justify-end mt-2">
+                            <button onclick="saveAnnotation()"
+                                class="bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded text-xs font-medium">Save
+                                Note</button>
+                        </div>
+                    </div>
+                </div>
 
-                    <div id="content-analysis" class="tab-content hidden">
-                        <div id="engine-lines" class="space-y-3"></div>
-                    </div>
+                <div id="content-analysis" class="tab-content hidden">
+                    <div id="engine-lines" class="space-y-3"></div>
                 </div>
                 <div class="p-4 border-t border-gray-700 bg-gray-850 flex justify-between items-center flex-shrink-0">
                     <div class="flex space-x-1">
@@ -338,7 +548,8 @@
                     <div id="eval-text" class="font-mono text-sm text-gray-400">0.0</div>
                 </div>
             </div>
-        </main>
+    </div>
+    </main>
     </div>
 
     <script>
@@ -393,16 +604,7 @@
             const bh = $('#myBoard').height();
             if (bh > 0) $('#eval-bar-v').height(bh);
 
-            const fenKey = game.fen().split(' ').slice(0, 4).join(' ');
-            const moves = treeData[fenKey] || {};
-            const $body = $('#tree-body').empty();
-            Object.keys(moves).sort((a, b) => moves[b].count - moves[a].count).forEach(m => {
-                const s = moves[m];
-                const wr = ((s.win / s.count) * 100).toFixed(1);
-                $body.append(`<tr class="border-b border-gray-850 hover:bg-gray-750 cursor-pointer" onclick="playMove('${m}')">
-                    <td class="py-3 font-bold text-blue-300 text-xs">${m}</td><td class="text-xs">${s.count}</td><td class="text-xs">${wr}%</td>
-                    <td class="text-right text-[10px]"><span class="text-green-400">${s.win}W</span> / <span class="text-red-400">${s.loss}L</span></td></tr>`);
-            });
+            updateTreeHighlight();
 
             // Update Highlight
             $('.move-btn').removeClass('active');
@@ -768,53 +970,305 @@
         // Cached data for search filtering
         let _cachedFolders = [];
         let _cachedGames = [];
-        let _treeSide = '';  // '', 'white', or 'black'
+        let _selectedTreeGames = new Set();  // checkbox staging
+        let _treeGames = new Set();          // committed to tree
 
-        function loadTree() {
-            const player = ($('#tree-player').val() || '').trim();
-            const side = _treeSide;
-            let url = '/tree?player=' + encodeURIComponent(player);
-            if (side) url += '&side=' + side;
-            const $info = $('#tree-player-info');
-            if (player) {
-                const sideLabel = side === 'white' ? 'as White' : side === 'black' ? 'as Black' : '';
-                $info.text(`Showing tree for "${player}" ${sideLabel}`.trim()).removeClass('hidden');
-            } else {
-                $info.addClass('hidden');
-            }
-            $.get(url, data => { treeData = data; updateUI(); });
+        let _treeSide = 'white'; // 'white' or 'black'
+
+        function populateTreePlayerDropdowns() {
+            const $white = $('#tree-white-player');
+            const $black = $('#tree-black-player');
+            const prevWhite = $white.val();
+            const prevBlack = $black.val();
+
+            // Collect unique players from games currently in the tree
+            const whitePlayers = new Set();
+            const blackPlayers = new Set();
+            _cachedGames.forEach(g => {
+                if (!_treeGames.has(g.id)) return;
+                if (g.white && g.white !== '?' && g.white !== 'Unknown') whitePlayers.add(g.white);
+                if (g.black && g.black !== '?' && g.black !== 'Unknown') blackPlayers.add(g.black);
+            });
+
+            // Rebuild options
+            $white.html('<option value="">Any player</option>');
+            $black.html('<option value="">Any player</option>');
+            [...whitePlayers].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).forEach(p => {
+                $white.append(`<option value="${p}">${p}</option>`);
+            });
+            [...blackPlayers].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).forEach(p => {
+                $black.append(`<option value="${p}">${p}</option>`);
+            });
+
+            // Restore previous selection if still available
+            if (prevWhite && whitePlayers.has(prevWhite)) $white.val(prevWhite);
+            if (prevBlack && blackPlayers.has(prevBlack)) $black.val(prevBlack);
         }
 
-        function setSide(side) {
-            _treeSide = side;
-            // Update button styles
-            $('#side-all, #side-white, #side-black').removeClass('bg-blue-600 text-white font-bold').addClass('bg-gray-700 text-gray-400');
-            if (side === 'white') $('#side-white').removeClass('bg-gray-700 text-gray-400').addClass('bg-blue-600 text-white font-bold');
-            else if (side === 'black') $('#side-black').removeClass('bg-gray-700 text-gray-400').addClass('bg-blue-600 text-white font-bold');
-            else $('#side-all').removeClass('bg-gray-700 text-gray-400').addClass('bg-blue-600 text-white font-bold');
+        function onTreePlayerChange() {
+            // Auto-infer _treeSide based on dropdown selection
+            const whitePlayer = $('#tree-white-player').val();
+            const blackPlayer = $('#tree-black-player').val();
+            if (whitePlayer && !blackPlayer) _treeSide = 'white';
+            else if (blackPlayer && !whitePlayer) _treeSide = 'black';
+            else _treeSide = 'white'; // default
             loadTree();
         }
 
-        function loadPlayerList() {
-            $.get('/players', function (players) {
-                const $dl = $('#player-list').empty();
-                players.forEach(p => $dl.append(`<option value="${p}">`));
+        function getFenKey(fen) {
+            return fen.split(' ').slice(0, 3).join(' ');
+        }
+
+        function buildTreeView() {
+            const $view = $('#tree-view').empty();
+            if (!treeData || Object.keys(treeData).length === 0) {
+                $view.html('<div class="text-[10px] text-gray-500 italic py-4 text-center">No tree data</div>');
+                return;
+            }
+            // Get the current board move path for auto-expanding
+            const boardHistory = game.history();
+            const tempGame = new Chess();
+            const startFen = getFenKey(tempGame.fen());
+            renderTreeBranch($view, tempGame, startFen, 0, 14, [], boardHistory);
+        }
+
+        function renderTreeBranch($container, parentGame, fenKey, depth, maxDepth, movePath, boardHistory) {
+            if (depth >= maxDepth) return;
+            const moves = treeData[fenKey];
+            if (!moves) return;
+
+            const turn = fenKey.split(' ')[1]; // 'w' or 'b'
+            const isPlayerTurn = (_treeSide === 'white' && turn === 'w') || (_treeSide === 'black' && turn === 'b');
+            const sorted = Object.keys(moves).sort((a, b) => moves[b].count - moves[a].count);
+            const flipWinLoss = (_treeSide === 'black');
+
+            // Current board FEN for highlighting
+            const currentFenKey = getFenKey(game.fen());
+
+            sorted.forEach((san, idx) => {
+                const s = moves[san];
+                // Flip win/loss if viewing as Black
+                const winVal = flipWinLoss ? s.loss : s.win;
+                const lossVal = flipWinLoss ? s.win : s.loss;
+                const wr = ((winVal / s.count) * 100).toFixed(1);
+                const dr = ((s.draw / s.count) * 100).toFixed(0);
+                const lr = ((lossVal / s.count) * 100).toFixed(0);
+                const path = movePath.concat(san);
+                const pathKey = path.join(',');
+                const moveClass = turn === 'w' ? 'white-move' : 'black-move';
+
+                // Format eval display
+                let evalHtml = '';
+                if (s.avg_eval !== null && s.avg_eval !== undefined) {
+                    const evalPawns = s.avg_eval / 100;
+                    const displayEval = flipWinLoss ? -evalPawns : evalPawns;
+                    const sign = displayEval > 0 ? '+' : '';
+                    const evalColor = displayEval > 0.3 ? '#4ade80' : (displayEval < -0.3 ? '#f87171' : '#9ca3af');
+                    evalHtml = `<span class="text-[9px] font-mono ml-1 flex-shrink-0" style="color:${evalColor}; min-width:32px; text-align:right">${sign}${displayEval.toFixed(1)}</span>`;
+                }
+
+                // Compute move number
+                const ply = depth + 1;
+                const moveNum = Math.ceil(ply / 2);
+                const moveLabel = turn === 'w' ? `${moveNum}.` : `${moveNum}...`;
+
+                // Compute resulting FEN
+                const tempGame = new Chess(parentGame.fen());
+                const result = tempGame.move(san);
+                if (!result) return;
+                const nextFen = getFenKey(tempGame.fen());
+                const hasChildren = !!treeData[nextFen];
+
+                // Check if this node is on the current board path
+                const isOnPath = currentFenKey === nextFen;
+                // Check if this move matches the board history at this depth (for auto-expanding)
+                const isOnBoardPath = boardHistory && depth < boardHistory.length && boardHistory[depth] === san;
+
+                // Auto-expand: along board path always, opponent moves, or first player branch at shallow depth
+                const autoExpand = isOnBoardPath || !isPlayerTurn || idx === 0 || depth < 2;
+
+                const $node = $(`<div class="tree-node" data-path="${pathKey}" data-fen="${nextFen}"></div>`);
+                const $header = $(`
+                    <div class="tree-node-header ${isOnPath ? 'active-path' : ''}" onclick="playTreePath('${pathKey}')" title="${san}: ${s.count} games, ${wr}% win">
+                        <span class="chevron">${hasChildren ? (autoExpand ? '▾' : '▸') : '·'}</span>
+                        <span class="text-gray-500 text-[9px]">${moveLabel}</span>
+                        <span class="move-san ${moveClass}">${san}</span>
+                        <span class="move-count">${s.count}</span>
+                        <span class="win-bar"><span class="wb" style="width:${wr}%"></span><span class="db" style="width:${dr}%"></span><span class="lb" style="width:${lr}%"></span></span>
+                        <span class="text-[9px] flex-shrink-0 ${parseFloat(wr) >= 50 ? 'text-green-400' : 'text-red-400'}" style="min-width:28px; text-align:right">${wr}%</span>
+                        ${evalHtml}
+                    </div>
+                `);
+
+                const $children = $(`<div class="tree-node-children ${autoExpand ? '' : 'collapsed'}"></div>`);
+
+                // Toggle expand/collapse on chevron
+                $header.find('.chevron').on('click', function (e) {
+                    e.stopPropagation();
+                    const $ch = $node.find('> .tree-node-children');
+                    $ch.toggleClass('collapsed');
+                    $(this).text($ch.hasClass('collapsed') ? '▸' : '▾');
+                    // Lazy-load children if not yet rendered
+                    if (!$ch.hasClass('collapsed') && $ch.children().length === 0 && hasChildren) {
+                        renderTreeBranch($ch, tempGame, nextFen, depth + 1, maxDepth, path, boardHistory);
+                    }
+                });
+
+                $node.append($header);
+
+                if (hasChildren) {
+                    if (autoExpand) {
+                        renderTreeBranch($children, tempGame, nextFen, depth + 1, maxDepth, path, boardHistory);
+                    }
+                    $node.append($children);
+                }
+
+                $container.append($node);
             });
         }
 
-        function loadData() {
-            loadTree();
+        function updateTreeHighlight() {
+            // Remove old highlights
+            $('.tree-node-header.active-path').removeClass('active-path');
+            // Find the tree node matching current board FEN and highlight it
+            const currentFenKey = getFenKey(game.fen());
+            $(`.tree-node[data-fen="${currentFenKey}"]`).each(function () {
+                const $header = $(this).children('.tree-node-header');
+                $header.addClass('active-path');
+                // Make sure all ancestor nodes are expanded
+                $(this).parents('.tree-node-children.collapsed').each(function () {
+                    $(this).removeClass('collapsed');
+                    $(this).siblings('.tree-node-header').find('.chevron').text('▾');
+                });
+            });
+        }
 
-            // Fetch folders and games together
+        function playTreePath(pathKey) {
+            const moves = pathKey.split(',');
+            game = new Chess();
+            for (const san of moves) {
+                if (!game.move(san)) break;
+            }
+            board.position(game.fen(), false);
+            // Sync with loaded game if applicable
+            const fen = game.fen();
+            const moveIdx = gameMoves.findIndex(m => m.fen === fen);
+            if (moveIdx !== -1) currentMoveIndex = moveIdx;
+            updateUI();
+            fetchAnalysis();
+        }
+
+        function loadTree() {
+            const allIds = Array.from(_treeGames);
+            const $info = $('#tree-info-text');
+            if (allIds.length === 0) {
+                treeData = {};
+                $info.html('<span class="text-gray-500 italic">Select games in the Games tab to build tree</span>');
+                buildTreeView();
+                return;
+            }
+
+            // Filter by player dropdowns
+            const whiteFilter = $('#tree-white-player').val();
+            const blackFilter = $('#tree-black-player').val();
+            const filteredIds = allIds.filter(id => {
+                const g = _cachedGames.find(g => g.id === id);
+                if (!g) return true;
+                if (whiteFilter && g.white !== whiteFilter) return false;
+                if (blackFilter && g.black !== blackFilter) return false;
+                return true;
+            });
+
+            if (filteredIds.length === 0) {
+                treeData = {};
+                const totalN = allIds.length;
+                $info.html(`<span class="text-yellow-400 text-[10px]">No games match filters</span> · <a href="#" onclick="showTreeGamesInTab(); return false;" class="text-blue-400 hover:text-blue-300 underline font-medium not-italic text-[10px]">${totalN} in tree</a>`);
+                buildTreeView();
+                return;
+            }
+
+            const n = filteredIds.length;
+            const totalN = allIds.length;
+            const filterNote = (whiteFilter || blackFilter) ? ` of ${totalN}` : '';
+            $info.html(`Based on <a href="#" onclick="showTreeGamesInTab(); return false;" class="text-blue-400 hover:text-blue-300 underline font-medium not-italic">${n}${filterNote} game${n !== 1 ? 's' : ''}</a>`);
+            $.get('/tree?game_ids=' + filteredIds.join(','), data => { treeData = data; buildTreeView(); });
+        }
+
+        function showTreeGamesInTab() {
+            showTab('games');
+            // Set search to a special filter token so only tree games are visible
+            $('#game-search').val('::tree');
+            $('#game-search-clear').removeClass('hidden');
+            renderGameList();
+        }
+
+        function toggleTreeGame(gameId) {
+            if (_selectedTreeGames.has(gameId)) {
+                _selectedTreeGames.delete(gameId);
+            } else {
+                _selectedTreeGames.add(gameId);
+            }
+            updateSelectionCount();
+        }
+
+        function addToTree() {
+            if (_selectedTreeGames.size === 0) return;
+            _selectedTreeGames.forEach(id => _treeGames.add(id));
+            _selectedTreeGames.clear();
+            $('.tree-checkbox').prop('checked', false);
+            updateSelectionCount();
+            renderGameList();
+            populateTreePlayerDropdowns();
+            loadTree();
+        }
+
+        function removeFromTree(gameId) {
+            _treeGames.delete(gameId);
+            renderGameList();
+            populateTreePlayerDropdowns();
+            loadTree();
+        }
+
+        function clearTree() {
+            _treeGames.clear();
+            _selectedTreeGames.clear();
+            $('.tree-checkbox').prop('checked', false);
+            updateSelectionCount();
+            renderGameList();
+            populateTreePlayerDropdowns();
+            loadTree();
+        }
+
+        function selectAllVisibleGames() {
+            $('#game-list .tree-checkbox').each(function () {
+                const id = parseInt($(this).data('game-id'));
+                _selectedTreeGames.add(id);
+                $(this).prop('checked', true);
+            });
+            updateSelectionCount();
+        }
+
+        function updateSelectionCount() {
+            const nSel = _selectedTreeGames.size;
+            const nTree = _treeGames.size;
+            let text = '';
+            if (nSel > 0) text += nSel + ' checked';
+            if (nSel > 0 && nTree > 0) text += ' · ';
+            if (nTree > 0) text += nTree + ' in tree';
+            $('#selected-count').text(text);
+            $('#add-to-tree-btn').prop('disabled', nSel === 0);
+        }
+
+        function loadData() {
+            // Fetch folders and games together, then load tree
             $.when($.get('/folders'), $.get('/games')).done(function (foldersRes, gamesRes) {
                 const folderData = foldersRes[0];
                 _cachedFolders = folderData.folders;
                 _cachedGames = gamesRes[0];
                 renderGameList();
+                populateTreePlayerDropdowns();
+                loadTree();
             });
-
-            // Refresh player autocomplete list
-            loadPlayerList();
         }
 
         function renderGameList() {
@@ -836,8 +1290,10 @@
             });
 
             // Helper: check if a game matches the search query
+            const isTreeFilter = query === '::tree';
             function gameMatches(g) {
                 if (!query) return true;
+                if (isTreeFilter) return _treeGames.has(g.id);
                 const w = (g.white || '').toLowerCase();
                 const b = (g.black || '').toLowerCase();
                 const n = (g.name || '').toLowerCase();
@@ -958,12 +1414,18 @@
             const p = player || '';
             const isW = p && w.toLowerCase().includes(p.toLowerCase()), isB = p && b.toLowerCase().includes(p.toLowerCase());
             const nameHtml = g.name ? `<div class="text-[10px] text-purple-300 font-medium">${g.name}</div>` : '';
+            const isChecked = _selectedTreeGames.has(g.id) ? 'checked' : '';
+            const inTree = _treeGames.has(g.id);
+            const treeClass = inTree ? ' game-in-tree' : '';
+            const treeBadge = inTree ? `<span class="in-tree-badge" onclick="event.stopPropagation()">🌳 In Tree<span class="remove-tree" onclick="removeFromTree(${g.id})" title="Remove from tree">✕</span></span>` : '';
 
-            return `<div class="bg-gray-750 rounded border border-gray-700 text-sm overflow-hidden game-draggable"
+            return `<div class="bg-gray-750 rounded border border-gray-700 text-sm overflow-hidden game-draggable${treeClass}"
                          draggable="true" data-game-id="${g.id}"
                          ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)">
                 <div class="p-3 flex justify-between items-center cursor-pointer hover:bg-gray-700 transition" onclick="toggleGameExpand(${g.id})">
                     <div class="flex items-center gap-2">
+                        <input type="checkbox" class="tree-checkbox" data-game-id="${g.id}" ${isChecked}
+                            onclick="event.stopPropagation(); toggleTreeGame(${g.id})" title="Select for tree">
                         <span class="drag-grip text-gray-600 cursor-grab text-[12px] select-none" title="Drag to move">⠿</span>
                         <span id="chevron-${g.id}" class="text-gray-500 text-[10px] transform transition-transform">▶</span>
                         <div>
@@ -973,6 +1435,7 @@
                         </div>
                     </div>
                     <div class="flex items-center space-x-2">
+                        ${treeBadge}
                         <button onclick="event.stopPropagation(); loadGameMoves(${g.id})" class="text-blue-400 hover:text-blue-300 text-[10px] border border-blue-900/30 px-2 py-1 rounded bg-blue-900/10">LOAD</button>
                         <button onclick="event.stopPropagation(); requestDelete(${g.id}, this)" class="text-red-500 hover:text-red-400 text-[10px] min-w-[40px] text-right">Delete</button>
                     </div>

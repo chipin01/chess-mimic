@@ -85,39 +85,56 @@ def get_players():
 
 @app.route('/tree')
 def get_tree():
-    player_name = request.args.get('player', '')
-    side = request.args.get('side', '')  # 'white', 'black', or '' for both
+    game_ids_param = request.args.get('game_ids', '')
+    if not game_ids_param.strip():
+        return jsonify({})
+    try:
+        game_ids = set(int(x) for x in game_ids_param.split(',') if x.strip())
+    except ValueError:
+        return jsonify({}), 400
     games = database.get_all_games()
     move_db = {} 
     for g in games:
+        if g['id'] not in game_ids: continue
         pgn_io = io.StringIO(g['pgn'])
         game = chess.pgn.read_game(pgn_io)
         if not game: continue
         white = game.headers.get("White", "")
         black = game.headers.get("Black", "")
-        res = game.headers.get("Result", "*")
-        is_white = player_name.lower() in white.lower() if player_name else False
-        is_black = player_name.lower() in black.lower() if player_name else False
-        # Filter by side preference
-        if player_name:
-            if side == 'white' and not is_white: continue
-            elif side == 'black' and not is_black: continue
-            elif not side and not (is_white or is_black): continue
+        res = g.get('result', '*')  # Use database result (correctly parsed), not PGN header
         stat = "draw"
-        if res == "1-0": stat = "win" if is_white else "loss"
-        elif res == "0-1": stat = "win" if is_black else "loss"
+        if res == "1-0": stat = "win"
+        elif res == "0-1": stat = "loss"
+        # Load stored evals for this game
+        game_evals = []
+        if g.get('evals'):
+            try: game_evals = json_module.loads(g['evals'])
+            except: pass
         board = game.board()
-        for move in game.mainline_moves():
-            if not player_name or (board.turn == chess.WHITE and is_white) or (board.turn == chess.BLACK and is_black):
-                fen = ingest.get_fen_key(board)
-                move_san = board.san(move)
-                if fen not in move_db: move_db[fen] = {}
-                if move_san not in move_db[fen]:
-                    move_db[fen][move_san] = {"count": 0, "win": 0, "loss": 0, "draw": 0}
-                m = move_db[fen][move_san]
-                m["count"] += 1
-                m[stat] += 1
+        for move_idx, move in enumerate(game.mainline_moves()):
+            fen = " ".join(board.fen().split(' ')[:3])
+            move_san = board.san(move)
+            if fen not in move_db: move_db[fen] = {}
+            if move_san not in move_db[fen]:
+                move_db[fen][move_san] = {"count": 0, "win": 0, "loss": 0, "draw": 0, "eval_sum": 0, "eval_count": 0}
+            m = move_db[fen][move_san]
+            m["count"] += 1
+            m[stat] += 1
+            # Add eval if available (eval at move_idx = eval after this move)
+            if move_idx < len(game_evals):
+                m["eval_sum"] += game_evals[move_idx]
+                m["eval_count"] += 1
             board.push(move)
+    # Compute average eval and remove accumulator fields
+    for fen in move_db:
+        for san in move_db[fen]:
+            m = move_db[fen][san]
+            if m["eval_count"] > 0:
+                m["avg_eval"] = round(m["eval_sum"] / m["eval_count"])
+            else:
+                m["avg_eval"] = None
+            del m["eval_sum"]
+            del m["eval_count"]
     return jsonify(move_db)
 
 @app.route('/games', methods=['GET'])
