@@ -283,12 +283,78 @@
             font-size: 12px;
         }
 
-        .tree-node-header .move-san.white-move {
+        .tree-node-header .move-san.white-move,
+        .linear-cell .move-san.white-move {
             color: #faf0e1;
         }
 
-        .tree-node-header .move-san.black-move {
+        .tree-node-header .move-san.black-move,
+        .linear-cell .move-san.black-move {
             color: #8b6840;
+        }
+
+        .tree-node-header .inline-move {
+            cursor: pointer;
+            padding: 0 1px;
+            border-radius: 2px;
+            transition: background 0.1s;
+        }
+
+        .tree-node-header .inline-move:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .line-expand-btn {
+            font-size: 9px;
+            color: #60a5fa;
+            cursor: pointer;
+            padding: 0 3px;
+            border-radius: 2px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .line-expand-btn:hover {
+            background: rgba(96, 165, 250, 0.15);
+            color: #93bbfc;
+        }
+
+        .linear-continuation {
+            margin-left: 4px;
+            border-left: 1px solid #374151;
+            padding-left: 14px;
+        }
+
+        .linear-grid {
+            display: grid;
+            grid-template-columns: 28px 1fr 1fr;
+            gap: 0;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .linear-num {
+            color: #6b7280;
+            font-size: 9px;
+            padding: 2px 2px;
+            text-align: right;
+            line-height: 20px;
+        }
+
+        .linear-cell {
+            padding: 2px 6px;
+            border-radius: 3px;
+            cursor: pointer;
+            line-height: 20px;
+        }
+
+        .linear-cell.inline-move:hover {
+            background: rgba(55, 70, 90, 0.6);
+        }
+
+        .linear-cell.active-cell {
+            background: rgba(59, 130, 246, 0.2);
+            border-radius: 3px;
         }
 
         .tree-node-header .move-count {
@@ -430,19 +496,37 @@
                             <div class="flex items-center gap-1 flex-1 min-w-0">
                                 <span class="text-[12px] font-bold flex-shrink-0" style="color:#faf0e1">♔</span>
                                 <span class="text-[9px] font-semibold flex-shrink-0" style="color:#faf0e1">White</span>
-                                <select id="tree-white-player" class="tree-player-select"
-                                    onchange="onTreePlayerChange()">
-                                    <option value="">Any player</option>
-                                </select>
+                                <div id="tree-white-player-dropdown" class="relative flex-1 min-w-0">
+                                    <button onclick="$('#tree-white-options').toggleClass('hidden')"
+                                        class="tree-player-select w-full text-left truncate">Any player</button>
+                                    <div id="tree-white-options"
+                                        class="hidden absolute z-[110] left-0 right-0 mt-1 bg-gray-800 border border-gray-600 rounded shadow-xl max-h-48 overflow-y-auto p-1">
+                                        <label
+                                            class="flex items-center gap-2 p-1 hover:bg-gray-700 rounded cursor-pointer text-[10px]">
+                                            <input type="checkbox" value="" class="white-player-checkbox" checked
+                                                onchange="onTreePlayerChange(event)"> <span>Any player</span>
+                                        </label>
+                                        <div id="tree-white-list"></div>
+                                    </div>
+                                </div>
                             </div>
                             <span class="text-[9px] text-gray-600">vs</span>
                             <div class="flex items-center gap-1 flex-1 min-w-0">
                                 <span class="text-[12px] font-bold flex-shrink-0" style="color:#8b6840">♚</span>
                                 <span class="text-[9px] font-semibold flex-shrink-0" style="color:#8b6840">Black</span>
-                                <select id="tree-black-player" class="tree-player-select"
-                                    onchange="onTreePlayerChange()">
-                                    <option value="">Any player</option>
-                                </select>
+                                <div id="tree-black-player-dropdown" class="relative flex-1 min-w-0">
+                                    <button onclick="$('#tree-black-options').toggleClass('hidden')"
+                                        class="tree-player-select w-full text-left truncate">Any player</button>
+                                    <div id="tree-black-options"
+                                        class="hidden absolute z-[110] left-0 right-0 mt-1 bg-gray-800 border border-gray-600 rounded shadow-xl max-h-48 overflow-y-auto p-1">
+                                        <label
+                                            class="flex items-center gap-2 p-1 hover:bg-gray-700 rounded cursor-pointer text-[10px]">
+                                            <input type="checkbox" value="" class="black-player-checkbox" checked
+                                                onchange="onTreePlayerChange(event)"> <span>Any player</span>
+                                        </label>
+                                        <div id="tree-black-list"></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -976,10 +1060,10 @@
         let _treeSide = 'white'; // 'white' or 'black'
 
         function populateTreePlayerDropdowns() {
-            const $white = $('#tree-white-player');
-            const $black = $('#tree-black-player');
-            const prevWhite = $white.val();
-            const prevBlack = $black.val();
+            const $whiteList = $('#tree-white-list');
+            const $blackList = $('#tree-black-list');
+            const selectedWhite = new Set($('.white-player-checkbox:checked').map((_, el) => el.value).get());
+            const selectedBlack = new Set($('.black-player-checkbox:checked').map((_, el) => el.value).get());
 
             // Collect unique players from games currently in the tree
             const whitePlayers = new Set();
@@ -990,34 +1074,71 @@
                 if (g.black && g.black !== '?' && g.black !== 'Unknown') blackPlayers.add(g.black);
             });
 
-            // Rebuild options
-            $white.html('<option value="">Any player</option>');
-            $black.html('<option value="">Any player</option>');
+            // Rebuild lists
+            $whiteList.empty();
+            $blackList.empty();
             [...whitePlayers].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).forEach(p => {
-                $white.append(`<option value="${p}">${p}</option>`);
+                const checked = selectedWhite.has(p) ? 'checked' : '';
+                $whiteList.append(`
+                    <label class="flex items-center gap-2 p-1 hover:bg-gray-700 rounded cursor-pointer text-[10px]">
+                        <input type="checkbox" value="${p}" class="white-player-checkbox" ${checked} onchange="onTreePlayerChange(event)"> <span>${p}</span>
+                    </label>
+                `);
             });
             [...blackPlayers].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).forEach(p => {
-                $black.append(`<option value="${p}">${p}</option>`);
+                const checked = selectedBlack.has(p) ? 'checked' : '';
+                $blackList.append(`
+                    <label class="flex items-center gap-2 p-1 hover:bg-gray-700 rounded cursor-pointer text-[10px]">
+                        <input type="checkbox" value="${p}" class="black-player-checkbox" ${checked} onchange="onTreePlayerChange(event)"> <span>${p}</span>
+                    </label>
+                `);
             });
 
-            // Restore previous selection if still available
-            if (prevWhite && whitePlayers.has(prevWhite)) $white.val(prevWhite);
-            if (prevBlack && blackPlayers.has(prevBlack)) $black.val(prevBlack);
+            updatePlayerSelectButtons();
         }
 
-        function onTreePlayerChange() {
-            // Auto-infer _treeSide based on dropdown selection
-            const whitePlayer = $('#tree-white-player').val();
-            const blackPlayer = $('#tree-black-player').val();
-            if (whitePlayer && !blackPlayer) _treeSide = 'white';
-            else if (blackPlayer && !whitePlayer) _treeSide = 'black';
-            else _treeSide = 'white'; // default
+        function updatePlayerSelectButtons() {
+            const selectedWhite = $('.white-player-checkbox:checked').map((_, el) => el.value).get().filter(v => v !== '');
+            const selectedBlack = $('.black-player-checkbox:checked').map((_, el) => el.value).get().filter(v => v !== '');
+
+            $('#tree-white-player-dropdown button').text(selectedWhite.length === 0 ? 'Any player' : (selectedWhite.length === 1 ? selectedWhite[0] : selectedWhite.length + ' players'));
+            $('#tree-black-player-dropdown button').text(selectedBlack.length === 0 ? 'Any player' : (selectedBlack.length === 1 ? selectedBlack[0] : selectedBlack.length + ' players'));
+        }
+
+        function onTreePlayerChange(event) {
+            // Handle "Any player" checkbox logic
+            if ($(event.target).val() === "") {
+                const isChecked = $(event.target).prop('checked');
+                const listClass = $(event.target).hasClass('white-player-checkbox') ? '.white-player-checkbox' : '.black-player-checkbox';
+                if (isChecked) {
+                    $(listClass).prop('checked', false);
+                    $(event.target).prop('checked', true);
+                }
+            } else {
+                const listClass = $(event.target).hasClass('white-player-checkbox') ? '.white-player-checkbox' : '.black-player-checkbox';
+                if ($(event.target).prop('checked')) {
+                    $(`${listClass}[value=""]`).prop('checked', false);
+                }
+            }
+
+            updatePlayerSelectButtons();
+
+            // Auto-infer _treeSide
+            const whitePlayers = $('.white-player-checkbox:checked').map((_, el) => el.value).get().filter(v => v !== '');
+            const blackPlayers = $('.black-player-checkbox:checked').map((_, el) => el.value).get().filter(v => v !== '');
+
+            if (whitePlayers.length > 0 && blackPlayers.length === 0) _treeSide = 'white';
+            else if (blackPlayers.length > 0 && whitePlayers.length === 0) _treeSide = 'black';
+            else _treeSide = 'white';
+
             loadTree();
         }
 
         function getFenKey(fen) {
             return fen.split(' ').slice(0, 3).join(' ');
         }
+
+        const TREE_INITIAL_DEPTH = 4; // Only eagerly render this many levels; rest is lazy-loaded on click
 
         function buildTreeView() {
             const $view = $('#tree-view').empty();
@@ -1029,7 +1150,7 @@
             const boardHistory = game.history();
             const tempGame = new Chess();
             const startFen = getFenKey(tempGame.fen());
-            renderTreeBranch($view, tempGame, startFen, 0, 14, [], boardHistory);
+            renderTreeBranch($view, tempGame, startFen, 0, 200, [], boardHistory);
         }
 
         function renderTreeBranch($container, parentGame, fenKey, depth, maxDepth, movePath, boardHistory) {
@@ -1037,62 +1158,106 @@
             const moves = treeData[fenKey];
             if (!moves) return;
 
-            const turn = fenKey.split(' ')[1]; // 'w' or 'b'
-            const isPlayerTurn = (_treeSide === 'white' && turn === 'w') || (_treeSide === 'black' && turn === 'b');
-            const sorted = Object.keys(moves).sort((a, b) => moves[b].count - moves[a].count);
             const flipWinLoss = (_treeSide === 'black');
-
-            // Current board FEN for highlighting
             const currentFenKey = getFenKey(game.fen());
+
+            const sorted = Object.keys(moves).sort((a, b) => moves[b].count - moves[a].count);
 
             sorted.forEach((san, idx) => {
                 const s = moves[san];
-                // Flip win/loss if viewing as Black
-                const winVal = flipWinLoss ? s.loss : s.win;
-                const lossVal = flipWinLoss ? s.win : s.loss;
-                const wr = ((winVal / s.count) * 100).toFixed(1);
-                const dr = ((s.draw / s.count) * 100).toFixed(0);
-                const lr = ((lossVal / s.count) * 100).toFixed(0);
-                const path = movePath.concat(san);
-                const pathKey = path.join(',');
-                const moveClass = turn === 'w' ? 'white-move' : 'black-move';
+                const turn = fenKey.split(' ')[1];
+                const isPlayerTurn = (_treeSide === 'white' && turn === 'w') || (_treeSide === 'black' && turn === 'b');
 
-                // Format eval display
+                // Follow the linear chain: collect consecutive single-continuation moves
+                const lineSpans = [];
+                let curGame = new Chess(parentGame.fen());
+                let curFen = fenKey;
+                let curSan = san;
+                let curStats = s;
+                let curDepth = depth;
+                let curPath = movePath.slice();
+                let endFen = null;
+                let endGame = null;
+
+                while (true) {
+                    const curTurn = curFen.split(' ')[1];
+                    const moveClass = curTurn === 'w' ? 'white-move' : 'black-move';
+                    const ply = curDepth + 1;
+                    const moveNum = Math.ceil(ply / 2);
+                    const moveLabel = curTurn === 'w' ? `${moveNum}.` : `${moveNum}...`;
+
+                    const result = curGame.move(curSan);
+                    if (!result) break;
+                    curPath = curPath.concat(curSan);
+                    const pathKey = curPath.join(',');
+                    endFen = getFenKey(curGame.fen());
+                    endGame = new Chess(curGame.fen());
+                    curDepth++;
+
+                    lineSpans.push({
+                        turn: curTurn,
+                        san: curSan,
+                        moveNum: moveNum,
+                        moveClass: moveClass,
+                        pathKey: pathKey,
+                        fen: endFen,
+                        html: `<span class="inline-move" onclick="event.stopPropagation(); playTreePath('${pathKey}')" title="${curSan}"><span class="text-gray-500 text-[9px]">${moveLabel}</span><span class="move-san ${moveClass}">${curSan}</span></span>`
+                    });
+
+                    // Check if the resulting position has exactly one continuation
+                    const nextMoves = treeData[endFen];
+                    if (!nextMoves) break; // dead end
+                    const nextSans = Object.keys(nextMoves);
+                    if (nextSans.length !== 1) break; // branch point — stop inlining
+
+                    // Continue the linear chain
+                    curSan = nextSans[0];
+                    curStats = nextMoves[curSan];
+                    curFen = endFen;
+                }
+
+                // Use stats from the last move in the chain for display
+                const finalStats = curStats;
+                const winVal = flipWinLoss ? finalStats.loss : finalStats.win;
+                const lossVal = flipWinLoss ? finalStats.win : finalStats.loss;
+                const wr = ((winVal / finalStats.count) * 100).toFixed(1);
+                const dr = ((finalStats.draw / finalStats.count) * 100).toFixed(0);
+                const lr = ((lossVal / finalStats.count) * 100).toFixed(0);
+
+                // Eval from last move
                 let evalHtml = '';
-                if (s.avg_eval !== null && s.avg_eval !== undefined) {
-                    const evalPawns = s.avg_eval / 100;
+                if (finalStats.avg_eval !== null && finalStats.avg_eval !== undefined) {
+                    const evalPawns = finalStats.avg_eval / 100;
                     const displayEval = flipWinLoss ? -evalPawns : evalPawns;
                     const sign = displayEval > 0 ? '+' : '';
                     const evalColor = displayEval > 0.3 ? '#4ade80' : (displayEval < -0.3 ? '#f87171' : '#9ca3af');
                     evalHtml = `<span class="text-[9px] font-mono ml-1 flex-shrink-0" style="color:${evalColor}; min-width:32px; text-align:right">${sign}${displayEval.toFixed(1)}</span>`;
                 }
 
-                // Compute move number
-                const ply = depth + 1;
-                const moveNum = Math.ceil(ply / 2);
-                const moveLabel = turn === 'w' ? `${moveNum}.` : `${moveNum}...`;
+                const finalPathKey = curPath.join(',');
+                const hasChildren = endFen && !!treeData[endFen];
+                const isOnPath = endFen && currentFenKey === endFen;
 
-                // Compute resulting FEN
-                const tempGame = new Chess(parentGame.fen());
-                const result = tempGame.move(san);
-                if (!result) return;
-                const nextFen = getFenKey(tempGame.fen());
-                const hasChildren = !!treeData[nextFen];
-
-                // Check if this node is on the current board path
-                const isOnPath = currentFenKey === nextFen;
-                // Check if this move matches the board history at this depth (for auto-expanding)
+                // Check if this path includes the board history
                 const isOnBoardPath = boardHistory && depth < boardHistory.length && boardHistory[depth] === san;
 
-                // Auto-expand: along board path always, opponent moves, or first player branch at shallow depth
-                const autoExpand = isOnBoardPath || !isPlayerTurn || idx === 0 || depth < 2;
+                const isSingleGame = s.count === 1;
+                const withinInitialDepth = depth < TREE_INITIAL_DEPTH;
+                const autoExpand = withinInitialDepth && !isSingleGame && (isOnBoardPath || !isPlayerTurn || idx === 0 || depth < 2);
 
-                const $node = $(`<div class="tree-node" data-path="${pathKey}" data-fen="${nextFen}"></div>`);
+                // Build the continuation indicator for linear chains
+                const hasLinearContinuation = lineSpans.length > 1;
+                const lineId = `line-${depth}-${idx}-${Date.now()}`;
+                const continuationHtml = hasLinearContinuation
+                    ? `<span class="line-expand-btn" onclick="event.stopPropagation(); $(this).closest('.tree-node-header').find('.chevron').trigger('click')" title="${lineSpans.length - 1} more moves">${hasChildren ? '▾' : '…+' + (lineSpans.length - 1)}</span>`
+                    : '';
+
+                const $node = $(`<div class="tree-node" data-path="${finalPathKey}" data-fen="${endFen || ''}"></div>`);
                 const $header = $(`
-                    <div class="tree-node-header ${isOnPath ? 'active-path' : ''}" onclick="playTreePath('${pathKey}')" title="${san}: ${s.count} games, ${wr}% win">
+                    <div class="tree-node-header ${isOnPath ? 'active-path' : ''}" onclick="playTreePath('${finalPathKey}')" title="${s.count} games, ${wr}% win">
                         <span class="chevron">${hasChildren ? (autoExpand ? '▾' : '▸') : '·'}</span>
-                        <span class="text-gray-500 text-[9px]">${moveLabel}</span>
-                        <span class="move-san ${moveClass}">${san}</span>
+                        ${lineSpans[0].html}
+                        ${continuationHtml}
                         <span class="move-count">${s.count}</span>
                         <span class="win-bar"><span class="wb" style="width:${wr}%"></span><span class="db" style="width:${dr}%"></span><span class="lb" style="width:${lr}%"></span></span>
                         <span class="text-[9px] flex-shrink-0 ${parseFloat(wr) >= 50 ? 'text-green-400' : 'text-red-400'}" style="min-width:28px; text-align:right">${wr}%</span>
@@ -1100,25 +1265,77 @@
                     </div>
                 `);
 
+                // Add vertical continuation list below the header
+                if (hasLinearContinuation) {
+                    const lineStartHidden = !hasChildren;
+                    const $lineList = $(`<div id="${lineId}" class="${lineStartHidden ? 'hidden' : ''} linear-continuation"></div>`);
+                    const $grid = $(`<div class="linear-grid"></div>`);
+                    // Build paired rows: move#, white, black
+                    for (let li = 1; li < lineSpans.length; li++) {
+                        const span = lineSpans[li];
+                        if (span.turn === 'w') {
+                            const num = span.moveNum;
+                            const whiteCell = `<span class="linear-cell inline-move" data-fen="${span.fen}" onclick="event.stopPropagation(); playTreePath('${span.pathKey}')"><span class="move-san ${span.moveClass}">${span.san}</span></span>`;
+                            const nextSpan = (li + 1 < lineSpans.length && lineSpans[li + 1].turn === 'b') ? lineSpans[li + 1] : null;
+                            const blackCell = nextSpan
+                                ? `<span class="linear-cell inline-move" data-fen="${nextSpan.fen}" onclick="event.stopPropagation(); playTreePath('${nextSpan.pathKey}')"><span class="move-san ${nextSpan.moveClass}">${nextSpan.san}</span></span>`
+                                : `<span class="linear-cell"></span>`;
+                            if (nextSpan) li++;
+                            $grid.append(`<span class="linear-num">${num}.</span>${whiteCell}${blackCell}`);
+                        } else {
+                            // Black move without preceding white
+                            const num = span.moveNum;
+                            $grid.append(`<span class="linear-num">${num}.</span><span class="linear-cell"></span><span class="linear-cell inline-move" data-fen="${span.fen}" onclick="event.stopPropagation(); playTreePath('${span.pathKey}')"><span class="move-san ${span.moveClass}">${span.san}</span></span>`);
+                        }
+                    }
+                    $lineList.append($grid);
+                    $node.append($header);
+                    $node.append($lineList);
+                } else {
+                    $node.append($header);
+                }
+
+                // Determine if this node has expandable content (continuation or children)
+                const hasExpandable = hasLinearContinuation || hasChildren;
+
                 const $children = $(`<div class="tree-node-children ${autoExpand ? '' : 'collapsed'}"></div>`);
 
-                // Toggle expand/collapse on chevron
+                // Sync linear continuation with expand state
+                if (hasLinearContinuation && !autoExpand) {
+                    // Both start collapsed together
+                    $node.find('> .linear-continuation').addClass('hidden');
+                }
+
+                // Toggle expand/collapse on chevron — controls BOTH continuation and children as one unit
                 $header.find('.chevron').on('click', function (e) {
                     e.stopPropagation();
+                    const $cont = $node.find('> .linear-continuation');
                     const $ch = $node.find('> .tree-node-children');
-                    $ch.toggleClass('collapsed');
-                    $(this).text($ch.hasClass('collapsed') ? '▸' : '▾');
+                    const isCollapsed = $ch.hasClass('collapsed');
+                    if (isCollapsed) {
+                        // Expand both
+                        $cont.removeClass('hidden');
+                        $ch.removeClass('collapsed');
+                        $(this).text('▾');
+                        // Also update the line-expand-btn if present
+                        $header.find('.line-expand-btn').text('▾');
+                    } else {
+                        // Collapse both
+                        $cont.addClass('hidden');
+                        $ch.addClass('collapsed');
+                        $(this).text('▸');
+                        $header.find('.line-expand-btn').text('…+' + (lineSpans.length - 1));
+                    }
                     // Lazy-load children if not yet rendered
                     if (!$ch.hasClass('collapsed') && $ch.children().length === 0 && hasChildren) {
-                        renderTreeBranch($ch, tempGame, nextFen, depth + 1, maxDepth, path, boardHistory);
+                        renderTreeBranch($ch, endGame, endFen, curDepth, maxDepth, curPath, boardHistory);
                     }
                 });
 
-                $node.append($header);
 
                 if (hasChildren) {
                     if (autoExpand) {
-                        renderTreeBranch($children, tempGame, nextFen, depth + 1, maxDepth, path, boardHistory);
+                        renderTreeBranch($children, endGame, endFen, curDepth, maxDepth, curPath, boardHistory);
                     }
                     $node.append($children);
                 }
@@ -1130,6 +1347,7 @@
         function updateTreeHighlight() {
             // Remove old highlights
             $('.tree-node-header.active-path').removeClass('active-path');
+            $('.linear-cell.active-cell').removeClass('active-cell');
             // Find the tree node matching current board FEN and highlight it
             const currentFenKey = getFenKey(game.fen());
             $(`.tree-node[data-fen="${currentFenKey}"]`).each(function () {
@@ -1140,6 +1358,16 @@
                     $(this).removeClass('collapsed');
                     $(this).siblings('.tree-node-header').find('.chevron').text('▾');
                 });
+            });
+            // Also highlight linear continuation cells
+            $(`.linear-cell[data-fen="${currentFenKey}"]`).each(function () {
+                $(this).addClass('active-cell');
+                // Auto-expand the linear continuation if it's hidden
+                const $cont = $(this).closest('.linear-continuation');
+                if ($cont.hasClass('hidden')) {
+                    $cont.removeClass('hidden');
+                    $cont.siblings('.tree-node-header').find('.line-expand-btn').text('▾');
+                }
             });
         }
 
@@ -1168,14 +1396,15 @@
                 return;
             }
 
-            // Filter by player dropdowns
-            const whiteFilter = $('#tree-white-player').val();
-            const blackFilter = $('#tree-black-player').val();
+            // Filter by player checkboxes
+            const selectedWhite = new Set($('.white-player-checkbox:checked').map((_, el) => el.value).get().filter(v => v !== ''));
+            const selectedBlack = new Set($('.black-player-checkbox:checked').map((_, el) => el.value).get().filter(v => v !== ''));
+
             const filteredIds = allIds.filter(id => {
                 const g = _cachedGames.find(g => g.id === id);
                 if (!g) return true;
-                if (whiteFilter && g.white !== whiteFilter) return false;
-                if (blackFilter && g.black !== blackFilter) return false;
+                if (selectedWhite.size > 0 && !selectedWhite.has(g.white)) return false;
+                if (selectedBlack.size > 0 && !selectedBlack.has(g.black)) return false;
                 return true;
             });
 
@@ -1189,7 +1418,7 @@
 
             const n = filteredIds.length;
             const totalN = allIds.length;
-            const filterNote = (whiteFilter || blackFilter) ? ` of ${totalN}` : '';
+            const filterNote = (selectedWhite.size > 0 || selectedBlack.size > 0) ? ` of ${totalN}` : '';
             $info.html(`Based on <a href="#" onclick="showTreeGamesInTab(); return false;" class="text-blue-400 hover:text-blue-300 underline font-medium not-italic">${n}${filterNote} game${n !== 1 ? 's' : ''}</a>`);
             $.get('/tree?game_ids=' + filteredIds.join(','), data => { treeData = data; buildTreeView(); });
         }
